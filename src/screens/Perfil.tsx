@@ -85,7 +85,7 @@ export function Perfil() {
   ];
 
   return (
-    <div style={{ paddingBottom: 24 }}>
+    <div className="screen-px" style={{ paddingBottom: 24 }}>
       {/* Centered identity header */}
       <div
         style={{

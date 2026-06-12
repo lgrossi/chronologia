@@ -44,6 +44,29 @@ const TYPES: ReadonlyArray<{ value: EventType; label: string; icon: IconName }> 
 
 const SHADOW_CARD = '0 2px 0 ' + COLORS.line;
 
+// Feature-detect the native calendar API once. When present (desktop
+// Chrome/Edge/Firefox, Android, iOS) a trusted-gesture showPicker() opens the
+// calendar; when absent (older Safari) we render the native input inline as a
+// always-usable last resort instead of a button that could open nothing.
+const canShowPicker =
+  typeof HTMLInputElement !== 'undefined' && 'showPicker' in HTMLInputElement.prototype;
+
+// Visually hidden but kept in the DOM and focusable (sr-only). NOT display:none
+// (showPicker/focus would throw or no-op) and NOT positioned over the readout
+// button (it must not intercept the button's click).
+const srOnlyInput: CSSProperties = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  border: 0,
+  opacity: 0,
+  overflow: 'hidden',
+  clip: 'rect(0 0 0 0)',
+  whiteSpace: 'nowrap',
+};
+
 const rowCard: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
@@ -109,15 +132,23 @@ export function AddEvento({ dateKey, eventId, onClose, onSaved }: AddEventoProps
       ? 'anexo atual'
       : null;
 
+  // Must run synchronously inside the click handler so the trusted user-gesture
+  // is preserved for showPicker(). On desktop a native date input only focuses
+  // (no dropdown) without this; showPicker() surfaces the calendar instead.
   function openDatePicker() {
     const el = dateInputRef.current;
     if (!el) return;
     try {
-      el.showPicker?.();
+      if (typeof el.showPicker === 'function') {
+        el.showPicker();
+        return;
+      }
     } catch {
-      // showPicker can throw (not user-activated / unsupported); the native
-      // input remains tappable as the fallback, so swallow and move on.
+      // showPicker can throw (not user-activated / sandboxed); fall through to
+      // focus()+click(), then the always-visible native fallback covers the rest.
     }
+    el.focus();
+    el.click();
   }
 
   function clearAttachment() {
@@ -163,7 +194,10 @@ export function AddEvento({ dateKey, eventId, onClose, onSaved }: AddEventoProps
         style={{
           maxWidth: 480,
           margin: '0 auto',
-          padding: '54px 20px 40px',
+          paddingTop: 54,
+          paddingBottom: 40,
+          paddingLeft: 'var(--screen-px-left)',
+          paddingRight: 'var(--screen-px-right)',
           fontFamily: 'var(--font-sans, inherit)',
         }}
       >
@@ -231,27 +265,58 @@ export function AddEvento({ dateKey, eventId, onClose, onSaved }: AddEventoProps
         </div>
 
         {/* Quando — ONE on-brand readout (with year) is the only date string the
-            user sees. A real native <input type="date"> is layered transparently
-            over the whole row (opacity:0, pointer-events on) so a single tap on
-            Android Chrome lands directly on the input and opens the calendar — no
-            reliance on showPicker user-activation quirks. The row's onClick calls
-            showPicker too as a belt-and-suspenders fallback. */}
+            user sees. When the native calendar API is available the readout is a
+            <button> whose click synchronously calls input.showPicker() (with a
+            focus()+click() fallback), opening the calendar on desktop
+            Chrome/Edge/Firefox AND on Android/iOS from a single tap. The real
+            <input type="date"> stays in the DOM, sr-only (focusable, NOT
+            display:none, NOT overlaid on the button so it can't steal the click).
+            Where showPicker is unsupported, the native input is rendered inline
+            and visibly instead, guaranteeing a working control everywhere. */}
         <div style={sectionTitle}>Quando</div>
-        <div
-          onClick={openDatePicker}
-          style={{
-            ...rowCard,
-            position: 'relative',
-            marginBottom: 18,
-            boxShadow: SHADOW_CARD,
-            cursor: 'pointer',
-            gap: 12,
-          }}
-        >
-          <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 16 }}>
-            <Icon name="cal" size={18} color={COLORS.accent} />
-            {formatLongWithYearPt(chosenKey)}
-          </span>
+        {canShowPicker ? (
+          <div
+            style={{
+              ...rowCard,
+              position: 'relative',
+              marginBottom: 18,
+              boxShadow: SHADOW_CARD,
+              padding: 0,
+            }}
+          >
+            <button
+              type="button"
+              onClick={openDatePicker}
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: 16,
+                color: COLORS.ink,
+                fontFamily: 'inherit',
+                textAlign: 'left',
+                padding: '14px 16px',
+                minHeight: 44,
+              }}
+            >
+              <Icon name="cal" size={18} color={COLORS.accent} />
+              {formatLongWithYearPt(chosenKey)}
+            </button>
+            <input
+              ref={dateInputRef}
+              type="date"
+              value={chosenKey}
+              onChange={(e) => e.target.value && setChosenKey(e.target.value)}
+              aria-label="data do evento"
+              tabIndex={-1}
+              style={srOnlyInput}
+            />
+          </div>
+        ) : (
           <input
             ref={dateInputRef}
             type="date"
@@ -259,19 +324,18 @@ export function AddEvento({ dateKey, eventId, onClose, onSaved }: AddEventoProps
             onChange={(e) => e.target.value && setChosenKey(e.target.value)}
             aria-label="data do evento"
             style={{
-              position: 'absolute',
-              inset: 0,
+              ...rowCard,
               width: '100%',
-              height: '100%',
-              margin: 0,
-              padding: 0,
-              border: 'none',
-              opacity: 0,
+              marginBottom: 18,
+              boxShadow: SHADOW_CARD,
+              fontSize: 16,
+              fontFamily: 'inherit',
+              color: COLORS.ink,
               cursor: 'pointer',
               colorScheme: 'light',
             }}
           />
-        </div>
+        )}
 
         {/* Type-specific: infusão details */}
         {isInfusao && (

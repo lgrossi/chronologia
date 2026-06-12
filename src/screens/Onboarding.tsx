@@ -240,7 +240,10 @@ export function Onboarding({ onDone }: OnboardingProps) {
           minHeight: '100dvh',
           display: 'flex',
           flexDirection: 'column',
-          padding: '20px var(--screen-px) 24px',
+          paddingTop: 20,
+          paddingBottom: 24,
+          paddingLeft: 'var(--screen-px-left)',
+          paddingRight: 'var(--screen-px-right)',
           boxSizing: 'border-box',
         }}
       >

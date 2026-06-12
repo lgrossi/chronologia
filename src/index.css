@@ -43,6 +43,11 @@
   --font-sans: 'Hanken Grotesk', system-ui, sans-serif;
 
   --screen-px: 20px;
+  /* Safe-area-aware horizontal screen padding. Always at least --screen-px so
+   * content never sits flush to the edge, and grows to clear notches / rounded
+   * corners. Every screen's content column uses these via .screen-px. */
+  --screen-px-left: max(var(--screen-px), env(safe-area-inset-left));
+  --screen-px-right: max(var(--screen-px), env(safe-area-inset-right));
   --tap-min: 44px;
 }
 
@@ -105,4 +110,12 @@ button {
 .safe-x {
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
+}
+
+/* Consistent, safe-area-aware horizontal page padding. Every screen's content
+ * column uses this so nothing ever sits flush to the screen edge or under a
+ * notch / rounded corner. Single source of truth — change --screen-px once. */
+.screen-px {
+  padding-left: var(--screen-px-left);
+  padding-right: var(--screen-px-right);
 }

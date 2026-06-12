@@ -159,7 +159,16 @@ export function Registro({ dateKey, onClose, onSaved }: RegistroProps) {
         overflowY: 'auto',
       }}
     >
-      <div style={{ padding: '54px 20px 40px', maxWidth: 480, margin: '0 auto' }}>
+      <div
+        style={{
+          paddingTop: 54,
+          paddingBottom: 40,
+          paddingLeft: 'var(--screen-px-left)',
+          paddingRight: 'var(--screen-px-right)',
+          maxWidth: 480,
+          margin: '0 auto',
+        }}
+      >
         {/* Header */}
         <div
           style={{
