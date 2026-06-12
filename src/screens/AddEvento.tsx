@@ -129,6 +129,8 @@ export function AddEvento({ dateKey, eventId, onClose, onSaved }: AddEventoProps
   }, [eventId]);
 
   const isInfusao = type === 'infusao';
+  // Medication applies to infusions (drives the cycle) and to "remédio novo".
+  const showMed = isInfusao || type === 'remedio';
   // Medication cycle in whole weeks (Infliximabe = 56 days → 8 semanas).
   const weeks = med ? Math.round(med.intervalDays / 7) : null;
 
@@ -172,7 +174,7 @@ export function AddEvento({ dateKey, eventId, onClose, onSaved }: AddEventoProps
       id: eventId ?? crypto.randomUUID(),
       date: chosenKey,
       type,
-      medicationId: isInfusao ? med?.id : undefined,
+      medicationId: showMed ? med?.id : undefined,
       remindNextDoseDays: isInfusao && remind ? med?.intervalDays : undefined,
       attachments: attachment ? [attachment] : undefined,
       note: trimmed ? trimmed : undefined,
@@ -344,14 +346,40 @@ export function AddEvento({ dateKey, eventId, onClose, onSaved }: AddEventoProps
           />
         )}
 
-        {/* Type-specific: infusão details */}
-        {isInfusao && (
+        {/* Medication — pick ANY med from the list. Drives the cycle for
+            infusões; also offered for "remédio novo". */}
+        {showMed && (
           <div style={{ animation: 'fadeIn .2s' }}>
-            <div style={sectionTitle}>Detalhes da infusão</div>
-            <div style={{ ...rowCard, marginBottom: 10 }}>
+            <div style={sectionTitle}>{isInfusao ? 'Detalhes da infusão' : 'Medicamento'}</div>
+            <div style={{ ...rowCard, marginBottom: isInfusao ? 10 : 18 }}>
               <span style={{ fontSize: 15, color: COLORS.soft }}>medicamento</span>
-              <span style={{ fontSize: 15, fontWeight: 600 }}>{med ? `${med.name} ›` : '—'}</span>
+              {medications.length > 0 ? (
+                <select
+                  value={med?.id ?? ''}
+                  onChange={(e) => setMedId(e.target.value || undefined)}
+                  aria-label="medicamento"
+                  style={{
+                    fontSize: 15,
+                    fontWeight: 600,
+                    border: 'none',
+                    background: 'transparent',
+                    color: COLORS.ink,
+                    fontFamily: 'inherit',
+                    cursor: 'pointer',
+                    textAlign: 'right',
+                  }}
+                >
+                  {medications.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name || 'sem nome'}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span style={{ fontSize: 14, color: COLORS.faint }}>nenhum — adicione no Perfil</span>
+              )}
             </div>
+            {isInfusao && (
             <div style={{ ...rowCard, gap: 12, marginBottom: 18 }}>
               <button
                 type="button"
@@ -390,6 +418,7 @@ export function AddEvento({ dateKey, eventId, onClose, onSaved }: AddEventoProps
                 </span>
               )}
             </div>
+            )}
           </div>
         )}
 

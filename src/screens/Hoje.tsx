@@ -5,8 +5,10 @@
  * card (nothing logged yet) or the normal recap Card (tap to edit). All data is
  * live via the reactive hooks; navigation/overlay actions arrive as props.
  */
+import { useState } from 'react';
 import { useEventsInRange, useDay, useDaysInRange, useMedications, useProfile, useReminders } from '@/data/hooks';
 import { Card } from '@/components/Card';
+import { DayDetail } from '@/components/DayDetail';
 import { Btn } from '@/components/Btn';
 import { HFace } from '@/components/HFace';
 import { Icon } from '@/components/Icon';
@@ -38,13 +40,19 @@ function recapSubline(log: DayLog): string {
 export function Hoje({
   onRegistrar,
   onOpenLinha,
-  onOpenDay,
+  onEditDay,
+  onAddEvento,
+  onEditEvento,
 }: {
   onRegistrar: () => void;
   onOpenLinha: () => void;
-  onOpenDay: (dateKey: string) => void;
+  onEditDay: (dateKey: string) => void;
+  onAddEvento: (dateKey: string) => void;
+  onEditEvento: (eventId: string, dateKey: string) => void;
 }) {
   const todayKey = localDayKey();
+  // A tapped week-strip day opens the same chooser sheet as the calendar.
+  const [sheetDay, setSheetDay] = useState<string | null>(null);
   const profile = useProfile();
   const reminders = useReminders();
 
@@ -241,17 +249,23 @@ export function Hoje({
             <button
               key={cell.key}
               type="button"
-              onClick={() => onOpenDay(cell.key)}
+              onClick={() => setSheetDay(cell.key)}
               aria-label={`abrir ${cell.key}`}
               className="flex flex-1 cursor-pointer flex-col items-center gap-1.5 border-none bg-transparent p-0"
             >
               <div
                 className="h-[42px] w-full rounded-xl"
                 style={{
-                  background: cell.severity ? SEV[cell.severity] : COLORS.card,
+                  // severity ink for symptom days, Floresta green for a logged
+                  // tranquilo day, white only for days with no record at all.
+                  background: cell.severity
+                    ? SEV[cell.severity]
+                    : cell.logged
+                      ? COLORS.accent
+                      : COLORS.card,
                   border: cell.isToday
                     ? `2.5px solid ${COLORS.accent}`
-                    : `1.5px solid ${cell.severity ? 'transparent' : COLORS.line}`,
+                    : `1.5px solid ${cell.severity || cell.logged ? 'transparent' : COLORS.line}`,
                 }}
               />
               <span
@@ -279,6 +293,16 @@ export function Hoje({
           editar
         </span>
       </div>
+
+      {sheetDay && (
+        <DayDetail
+          dateKey={sheetDay}
+          onEditDay={onEditDay}
+          onAddEvento={onAddEvento}
+          onEditEvento={onEditEvento}
+          onClose={() => setSheetDay(null)}
+        />
+      )}
     </div>
   );
 }

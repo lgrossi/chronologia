@@ -56,13 +56,16 @@ export interface WeekCell {
   key: string;
   letter: string;
   severity: Severity | null;
+  /** A DayLog exists for this day. severity null + logged true = tranquilo. */
+  logged: boolean;
   isToday: boolean;
 }
 
 /**
  * The Mon..Sun strip for the week containing `todayKey`. Each cell carries the
- * day's `overallSeverity` (null = tranquilo / unlogged), its pt-BR weekday
- * letter, and whether it is today.
+ * day's `overallSeverity` (null when tranquilo OR unlogged — disambiguate with
+ * `logged`), whether a log exists at all, its pt-BR weekday letter, and whether
+ * it is today.
  */
 export function weekStrip(days: DayLog[], todayKey: string): WeekCell[] {
   const byDate = new Map(days.map((d) => [d.date, d]));
@@ -70,6 +73,7 @@ export function weekStrip(days: DayLog[], todayKey: string): WeekCell[] {
     key,
     letter: weekdayLetterPt(key),
     severity: byDate.get(key)?.overallSeverity ?? null,
+    logged: byDate.has(key),
     isToday: key === todayKey,
   }));
 }

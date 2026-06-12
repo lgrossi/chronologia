@@ -112,6 +112,17 @@ describe('weekStrip', () => {
     expect(thu?.severity).toBeNull();
   });
 
+  it('distinguishes a logged tranquilo day (logged, no severity) from an unlogged one', () => {
+    // The bug: a good day logged with no symptoms read as empty/white.
+    const days = [day('2026-06-09', { mood: 'bom', severity: null })];
+    const cells = weekStrip(days, '2026-06-10');
+    const tue = cells.find((c) => c.key === '2026-06-09');
+    const thu = cells.find((c) => c.key === '2026-06-11');
+    expect(tue?.logged).toBe(true);
+    expect(tue?.severity).toBeNull();
+    expect(thu?.logged).toBe(false);
+  });
+
   it('spans the Mon..Sun week with pt-BR weekday letters', () => {
     const cells = weekStrip([], '2026-06-10');
     expect(cells.map((c) => c.key)).toEqual([

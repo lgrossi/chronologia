@@ -163,7 +163,9 @@ function Shell() {
               <Hoje
                 onRegistrar={() => openRegistro()}
                 onOpenLinha={() => navigate('/linha')}
-                onOpenDay={(k) => openRegistro(k)}
+                onEditDay={(k) => openRegistro(k)}
+                onAddEvento={(k) => openEvento(k)}
+                onEditEvento={(id, k) => openEvento(k, id)}
               />
             }
           />
