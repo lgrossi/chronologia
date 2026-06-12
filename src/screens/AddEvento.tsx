@@ -16,7 +16,7 @@ import type { EventType } from '@/lib/types';
 import { COLORS } from '@/theme/tokens';
 import { Icon, type IconName } from '@/components/Icon';
 import { Btn } from '@/components/Btn';
-import { formatLongPt } from '@/lib/date';
+import { formatLongWithYearPt } from '@/lib/date';
 import { useMedications } from '@/data/hooks';
 import { repo } from '@/data/repo';
 
@@ -230,15 +230,18 @@ export function AddEvento({ dateKey, eventId, onClose, onSaved }: AddEventoProps
           })}
         </div>
 
-        {/* Quando — a real native date input is the interactive control. The
-            whole row opens the picker on a single tap (showPicker), and the
-            input sits in normal flow so it is itself the click target on
-            Android Chrome — nothing absolutely-positioned covers it. */}
+        {/* Quando — ONE on-brand readout (with year) is the only date string the
+            user sees. A real native <input type="date"> is layered transparently
+            over the whole row (opacity:0, pointer-events on) so a single tap on
+            Android Chrome lands directly on the input and opens the calendar — no
+            reliance on showPicker user-activation quirks. The row's onClick calls
+            showPicker too as a belt-and-suspenders fallback. */}
         <div style={sectionTitle}>Quando</div>
         <div
           onClick={openDatePicker}
           style={{
             ...rowCard,
+            position: 'relative',
             marginBottom: 18,
             boxShadow: SHADOW_CARD,
             cursor: 'pointer',
@@ -247,28 +250,26 @@ export function AddEvento({ dateKey, eventId, onClose, onSaved }: AddEventoProps
         >
           <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 16 }}>
             <Icon name="cal" size={18} color={COLORS.accent} />
-            {formatLongPt(chosenKey)}
+            {formatLongWithYearPt(chosenKey)}
           </span>
           <input
             ref={dateInputRef}
             type="date"
             value={chosenKey}
             onChange={(e) => e.target.value && setChosenKey(e.target.value)}
-            onFocus={openDatePicker}
-            style={{
-              background: COLORS.card,
-              border: `1.5px solid ${COLORS.line}`,
-              borderRadius: 12,
-              padding: '8px 10px',
-              minHeight: 44,
-              fontFamily: 'inherit',
-              fontSize: 14,
-              color: COLORS.ink,
-              colorScheme: 'light',
-              outline: 'none',
-              cursor: 'pointer',
-            }}
             aria-label="data do evento"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              margin: 0,
+              padding: 0,
+              border: 'none',
+              opacity: 0,
+              cursor: 'pointer',
+              colorScheme: 'light',
+            }}
           />
         </div>
 

@@ -683,19 +683,30 @@ function DocsViewer({ events }: { events: HealthEvent[] }) {
         </div>
       )}
 
-      <BottomSheet open={viewing !== null} onClose={() => setViewing(null)}>
-        {viewing && <AttachmentView attachment={viewing} onClose={() => setViewing(null)} />}
-      </BottomSheet>
+      {viewing && <AttachmentOverlay attachment={viewing} onClose={() => setViewing(null)} />}
     </div>
   );
 }
 
+/** Dark scrim for the full-screen viewer (almost-opaque so the image reads). */
+const VIEWER_SCRIM = 'rgba(20,16,10,0.92)';
+
 /**
- * Renders one attachment from its in-memory Blob. Images show inline via an
- * object URL; anything else gets an open/download link. The object URL is
- * created per mount and revoked on unmount so blobs don't leak.
+ * Full-screen attachment viewer. Lives at `position: fixed; inset: 0` with a
+ * dark scrim so an exam photo is actually legible — the image fills the
+ * viewport (`object-fit: contain`, up to 100vw/100vh) instead of being boxed
+ * inside a bottom sheet. Native pinch-zoom is left untrapped (`touchAction`)
+ * so the user can magnify fine print. The object URL is created on mount and
+ * revoked on unmount/close so blobs don't leak. Tap the scrim or the × to
+ * close; non-image blobs get an "abrir" link instead of a broken <img>.
  */
-function AttachmentView({ attachment, onClose }: { attachment: AttachmentRef; onClose: () => void }) {
+function AttachmentOverlay({
+  attachment,
+  onClose,
+}: {
+  attachment: AttachmentRef;
+  onClose: () => void;
+}) {
   const { event, blob } = attachment;
   const [url, setUrl] = useState<string | null>(null);
 
@@ -706,43 +717,104 @@ function AttachmentView({ attachment, onClose }: { attachment: AttachmentRef; on
   }, [blob]);
 
   const isImage = blob.type.startsWith('image/');
+  const label = `${EVENT_LABELS[event.type]} de ${formatLongPt(event.date)}`;
 
   return (
-    <div>
-      <SheetTitle>
-        {EVENT_LABELS[event.type]} · {formatLongPt(event.date)}
-      </SheetTitle>
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 200,
+        background: VIEWER_SCRIM,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        // Let the browser handle pinch-zoom on the image rather than trapping it.
+        touchAction: 'pinch-zoom',
+      }}
+    >
+      <button
+        type="button"
+        aria-label="Fechar"
+        // The click bubbles to the scrim, so onClose fires twice — harmless
+        // because closing (setViewing(null)) is idempotent.
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          top: 'max(12px, env(safe-area-inset-top))',
+          right: 'max(12px, env(safe-area-inset-right))',
+          zIndex: 1,
+          width: 44,
+          height: 44,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderRadius: '50%',
+          background: 'rgba(244,238,224,0.14)',
+          border: 'none',
+          color: COLORS.paper,
+          fontSize: 26,
+          lineHeight: 1,
+          cursor: 'pointer',
+        }}
+      >
+        ×
+      </button>
+
       {url &&
         (isImage ? (
           <img
             src={url}
-            alt={`${EVENT_LABELS[event.type]} de ${formatLongPt(event.date)}`}
+            alt={label}
+            // Swallow the tap so zooming/panning the image doesn't close the viewer.
+            onClick={(e) => e.stopPropagation()}
             style={{
-              display: 'block',
-              width: '100%',
-              maxHeight: '56vh',
+              maxWidth: '100vw',
+              maxHeight: '100vh',
               objectFit: 'contain',
-              borderRadius: 14,
-              border: `1.5px solid ${COLORS.line}`,
             }}
           />
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <p style={{ fontSize: 14, color: COLORS.soft, lineHeight: 1.5 }}>
-              Este anexo não é uma imagem. Você pode abri-lo em uma nova aba.
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16,
+              alignItems: 'center',
+              maxWidth: 320,
+              padding: 24,
+            }}
+          >
+            <p style={{ fontSize: 15, color: COLORS.paper, lineHeight: 1.5, textAlign: 'center' }}>
+              Este anexo não é uma imagem.
             </p>
-            <Btn primary onClick={() => window.open(url, '_blank', 'noopener')}>
+            <a
+              href={url}
+              download={label}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                minHeight: 44,
+                padding: '0 20px',
+                borderRadius: 14,
+                background: COLORS.accent,
+                color: COLORS.onAccent,
+                fontSize: 15,
+                fontWeight: 600,
+                textDecoration: 'none',
+              }}
+            >
               <Icon name="flask" size={18} color={COLORS.onAccent} />
               abrir anexo
-            </Btn>
+            </a>
           </div>
         ))}
-      <div style={{ marginTop: 16 }}>
-        <Btn onClick={onClose}>
-          <Icon name="chevL" size={18} color={COLORS.ink} />
-          voltar
-        </Btn>
-      </div>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import {
   weekdayLetterPt,
   monthNamePt,
   formatLongPt,
+  formatLongWithYearPt,
   startOfWeekMonday,
   weekKeysMonday,
 } from './date';
@@ -94,6 +95,16 @@ describe('formatLongPt', () => {
   it('formats as "<full weekday>, <day> <short month>"', () => {
     expect(formatLongPt('2026-06-14')).toBe('domingo, 14 jun');
     expect(formatLongPt('2026-06-08')).toBe('segunda-feira, 8 jun');
+  });
+});
+
+describe('formatLongWithYearPt', () => {
+  it('includes weekday, day, full month name and year for a known Sunday', () => {
+    const out = formatLongWithYearPt('2026-05-31'); // domingo, 31 de maio de 2026
+    expect(out).toContain('domingo');
+    expect(out).toContain('31');
+    expect(out).toContain('maio');
+    expect(out).toContain('2026');
   });
 });
 

@@ -7,8 +7,10 @@
  * SACRED — they only ever color symptom intensity. Event markers (any of the
  * six EventTypes) use the neutral ink / single accent, never the inks.
  *
- * Filtering is screen-local: a single on-brand dropdown defaulting to 'Tudo'
- * (no filter). Options are every non-archived symptom and every event type.
+ * Filtering is screen-local and additive: a row of removable chips, each one a
+ * chosen symptom or event type, plus a '+ filtro' picker grouped by category.
+ * No active filters means show everything (there is no 'Tudo' affordance). With
+ * one or more filters a day matches if it satisfies ANY of them (union/OR).
  *
  * Every day is tappable — logged, empty, past or future — opening DayDetail,
  * which lists that day's events (each tappable to edit) and always offers two
@@ -76,11 +78,16 @@ const EVENT_ORDER: readonly EventType[] = [
 ];
 
 /**
- * Filter token. 'tudo' is the default (no filter). Symptom and event filters are
- * namespaced so a symptom literally named "exame" can't collide with the event
- * type. `sym:` matches by symptom name; `evt:` matches by event type.
+ * One active filter. Symptom and event filters are namespaced so a symptom
+ * literally named "exame" can't collide with the event type. `sym:` matches by
+ * symptom name; `evt:` matches by event type. The empty list = no filter.
  */
-type Filter = 'tudo' | `sym:${string}` | `evt:${EventType}`;
+type Filter = `sym:${string}` | `evt:${EventType}`;
+
+/** Human label for a filter token, used by both the chips and the picker. */
+function filterLabel(f: Filter): string {
+  return f.startsWith('evt:') ? EVENT_META[f.slice(4) as EventType].label : f.slice(4);
+}
 
 /** Monday-first column index (0..6) the 1st of the month lands on. */
 function leadingBlanks(monthStart: string): number {
@@ -104,7 +111,8 @@ export function Linha({ onEditDay, onAddEvento, onEditEvento }: LinhaProps) {
   // Which month is shown — defaults to the current month, navigable both ways.
   const [shownMonth, setShownMonth] = useState<string>(() => monthStartKey(localDayKey()));
   const [view, setView] = useState<View>('cal');
-  const [filter, setFilter] = useState<Filter>('tudo');
+  const [filters, setFilters] = useState<Filter[]>([]);
+  const [picking, setPicking] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
 
   const monthStart = monthStartKey(shownMonth);
@@ -142,17 +150,24 @@ export function Linha({ onEditDay, onAddEvento, onEditEvento }: LinhaProps) {
   const canPrev = offset > -MONTH_CLAMP;
   const canNext = offset < MONTH_CLAMP;
 
+  // No filters → everything matches. Otherwise a day matches if it satisfies
+  // ANY active filter (union/OR).
   const matches = (key: string): boolean => {
-    if (filter === 'tudo') return true;
-    if (filter.startsWith('evt:')) {
-      const type = filter.slice(4) as EventType;
-      return (eventsByKey.get(key) ?? []).some((e) => e.type === type);
-    }
-    // sym:<name>
-    const name = filter.slice(4).toLowerCase();
-    const log = dayByKey.get(key);
-    return !!log && log.symptoms.some((s) => s.name.toLowerCase() === name);
+    if (filters.length === 0) return true;
+    return filters.some((f) => {
+      if (f.startsWith('evt:')) {
+        const type = f.slice(4) as EventType;
+        return (eventsByKey.get(key) ?? []).some((e) => e.type === type);
+      }
+      const name = f.slice(4).toLowerCase();
+      const log = dayByKey.get(key);
+      return !!log && log.symptoms.some((s) => s.name.toLowerCase() === name);
+    });
   };
+
+  const addFilter = (f: Filter) =>
+    setFilters((cur) => (cur.includes(f) ? cur : [...cur, f]));
+  const removeFilter = (f: Filter) => setFilters((cur) => cur.filter((x) => x !== f));
 
   const total = daysInMonth(shownMonth);
   const blanks = leadingBlanks(monthStart);
@@ -220,11 +235,12 @@ export function Linha({ onEditDay, onAddEvento, onEditEvento }: LinhaProps) {
           </div>
         </div>
 
-        {/* Filter dropdown (defaults to 'Tudo' = no filter) */}
-        <FilterSelect
-          value={filter}
-          onChange={setFilter}
-          symptoms={activeSymptoms.map((s) => s.name)}
+        {/* Additive filter chips + a by-category picker. No chips = show all. */}
+        <FilterBar
+          filters={filters}
+          onRemove={removeFilter}
+          onClear={() => setFilters([])}
+          onOpenPicker={() => setPicking(true)}
         />
 
         {view === 'cal' ? (
@@ -245,11 +261,20 @@ export function Linha({ onEditDay, onAddEvento, onEditEvento }: LinhaProps) {
             dayByKey={dayByKey}
             eventsByKey={eventsByKey}
             matches={matches}
-            filtered={filter !== 'tudo'}
+            filtered={filters.length > 0}
             onSelect={setSelected}
           />
         )}
       </div>
+
+      {picking && (
+        <FilterPicker
+          active={filters}
+          symptoms={activeSymptoms.map((s) => s.name)}
+          onAdd={addFilter}
+          onClose={() => setPicking(false)}
+        />
+      )}
 
       {selected != null && (
         <DayDetail
@@ -299,67 +324,242 @@ function MonthArrow({
   );
 }
 
-function FilterSelect({
-  value,
-  onChange,
-  symptoms,
+/**
+ * The filter row: active filters as removable chips, an always-present
+ * '+ filtro' chip that opens the category picker, and — only when something is
+ * active — a quiet 'limpar' to clear all. No chips at all means "show
+ * everything"; there is deliberately no 'Tudo' affordance.
+ */
+function FilterBar({
+  filters,
+  onRemove,
+  onClear,
+  onOpenPicker,
 }: {
-  value: Filter;
-  onChange: (f: Filter) => void;
-  symptoms: string[];
+  filters: Filter[];
+  onRemove: (f: Filter) => void;
+  onClear: () => void;
+  onOpenPicker: () => void;
 }) {
   return (
-    <div style={{ position: 'relative', marginBottom: 16 }}>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as Filter)}
+    <div
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 16,
+      }}
+    >
+      {filters.map((f) => (
+        <FilterChip key={f} label={filterLabel(f)} onRemove={() => onRemove(f)} />
+      ))}
+      <button
+        onClick={onOpenPicker}
         style={{
-          appearance: 'none',
-          WebkitAppearance: 'none',
-          MozAppearance: 'none',
-          width: '100%',
-          padding: '10px 38px 10px 14px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 5,
+          minHeight: 44,
+          padding: '0 14px',
           borderRadius: 13,
-          border: `1.5px solid ${value === 'tudo' ? COLORS.line : COLORS.accent}`,
+          border: `1.5px dashed ${COLORS.line}`,
           background: COLORS.card,
-          color: value === 'tudo' ? COLORS.soft : COLORS.ink,
+          color: COLORS.soft,
           fontFamily: 'Hanken Grotesk, sans-serif',
-          fontSize: 14,
-          fontWeight: value === 'tudo' ? 500 : 700,
+          fontSize: 13.5,
+          fontWeight: 600,
           cursor: 'pointer',
         }}
       >
-        <option value="tudo">Tudo</option>
-        {symptoms.length > 0 && (
-          <optgroup label="Sintomas">
-            {symptoms.map((name) => (
-              <option key={`sym:${name}`} value={`sym:${name}`}>
-                {name}
-              </option>
-            ))}
-          </optgroup>
-        )}
-        <optgroup label="Eventos">
-          {EVENT_ORDER.map((t) => (
-            <option key={`evt:${t}`} value={`evt:${t}`}>
-              {EVENT_META[t].label}
-            </option>
-          ))}
-        </optgroup>
-      </select>
-      {/* Custom chevron — the native select arrow is hidden via appearance:none. */}
-      <span
+        <Icon name="plus" size={15} color={COLORS.soft} strokeWidth={2.4} />
+        filtro
+      </button>
+      {filters.length > 0 && (
+        <button
+          onClick={onClear}
+          style={{
+            minHeight: 44,
+            padding: '0 8px',
+            border: 'none',
+            background: 'transparent',
+            color: COLORS.faint,
+            fontFamily: 'Hanken Grotesk, sans-serif',
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          limpar filtros
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** A single active-filter chip: label + an × that removes just this filter. */
+function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 2,
+        minHeight: 44,
+        paddingLeft: 14,
+        paddingRight: 0,
+        borderRadius: 13,
+        border: `1.5px solid ${COLORS.line}`,
+        background: COLORS.card,
+        color: COLORS.ink,
+        fontFamily: 'Hanken Grotesk, sans-serif',
+        fontSize: 13.5,
+        fontWeight: 600,
+      }}
+    >
+      {label}
+      {/* Hit area is the full 44px button; the visual badge inside stays ~30px. */}
+      <button
+        onClick={onRemove}
+        aria-label={`remover filtro ${label}`}
         style={{
-          position: 'absolute',
-          right: 12,
-          top: '50%',
-          transform: 'translateY(-50%)',
-          pointerEvents: 'none',
           display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 44,
+          height: 44,
+          padding: 0,
+          border: 'none',
+          background: 'transparent',
+          cursor: 'pointer',
+          flexShrink: 0,
         }}
       >
-        <Icon name="chevR" size={16} color={COLORS.faint} strokeWidth={2.5} />
-      </span>
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 30,
+            height: 30,
+            borderRadius: 9,
+            background: COLORS.accentSoft,
+            color: COLORS.accent,
+            fontSize: 16,
+            fontWeight: 700,
+            lineHeight: 1,
+          }}
+        >
+          ×
+        </span>
+      </button>
+    </span>
+  );
+}
+
+/**
+ * Category picker: a bottom sheet with two labelled sections — Sintomas and
+ * Eventos. Tapping an item adds it; already-active items are hidden from the
+ * choices (they live in the chip row instead).
+ */
+function FilterPicker({
+  active,
+  symptoms,
+  onAdd,
+  onClose,
+}: {
+  active: Filter[];
+  symptoms: string[];
+  onAdd: (f: Filter) => void;
+  onClose: () => void;
+}) {
+  const symptomChoices = symptoms
+    .map((name): Filter => `sym:${name}`)
+    .filter((f) => !active.includes(f));
+  const eventChoices = EVENT_ORDER.map((t): Filter => `evt:${t}`).filter(
+    (f) => !active.includes(f),
+  );
+
+  return (
+    <BottomSheet open onClose={onClose}>
+      <div
+        style={{
+          fontFamily: 'Schibsted Grotesk, sans-serif',
+          fontSize: 22,
+          fontWeight: 700,
+          marginBottom: 16,
+        }}
+      >
+        Adicionar filtro
+      </div>
+
+      <PickerSection
+        title="Sintomas"
+        choices={symptomChoices}
+        empty="Sem sintomas para filtrar."
+        onPick={(f) => onAdd(f)}
+      />
+      <PickerSection
+        title="Eventos"
+        choices={eventChoices}
+        empty="Sem mais tipos para filtrar."
+        onPick={(f) => onAdd(f)}
+      />
+    </BottomSheet>
+  );
+}
+
+function PickerSection({
+  title,
+  choices,
+  empty,
+  onPick,
+}: {
+  title: string;
+  choices: Filter[];
+  empty: string;
+  onPick: (f: Filter) => void;
+}) {
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <div
+        style={{
+          fontSize: 12,
+          fontWeight: 700,
+          letterSpacing: 0.5,
+          textTransform: 'uppercase',
+          color: COLORS.faint,
+          marginBottom: 10,
+        }}
+      >
+        {title}
+      </div>
+      {choices.length === 0 ? (
+        <div style={{ fontSize: 13.5, color: COLORS.soft }}>{empty}</div>
+      ) : (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {choices.map((f) => (
+            <button
+              key={f}
+              onClick={() => onPick(f)}
+              style={{
+                minHeight: 44,
+                padding: '0 16px',
+                borderRadius: 13,
+                border: `1.5px solid ${COLORS.line}`,
+                background: COLORS.card,
+                color: COLORS.ink,
+                fontFamily: 'Hanken Grotesk, sans-serif',
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              {filterLabel(f)}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

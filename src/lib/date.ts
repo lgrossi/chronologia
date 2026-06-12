@@ -58,6 +58,11 @@ export function formatGreetingPt(key: string): string {
   return format(parseDayKey(key), "EEEE '·' d MMMM", { locale: ptBR });
 }
 
+/** e.g. 'domingo, 31 de maio de 2026' — full weekday, day, full month, year. */
+export function formatLongWithYearPt(key: string): string {
+  return format(parseDayKey(key), "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR });
+}
+
 /** First day-key of the calendar month containing `key` (e.g. '2026-06-14' → '2026-06-01'). */
 export function monthStartKey(key: string): string {
   const d = parseDayKey(key);
