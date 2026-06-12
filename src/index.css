@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design tokens mirrored from tokens.css — for inline/runtime use. */
+:root {
+  --paper: #f4eee0;
+  --card: #fbf7ec;
+  --device: #e7e1d6;
+
+  --ink: #3a352e;
+  --ink-soft: #6f685b;
+  --ink-faint: #a79f8e;
+
+  --line: #e3dac6;
+  --line-soft: #ede6d6;
+
+  --accent: #3f5a43;
+  --accent-deep: #33492f;
+  --accent-soft: #e5ecdf;
+  --accent-on: #f4eee0;
+
+  --sev-leve: #3f6db0;
+  --sev-moderado: #e0892b;
+  --sev-grave: #8a4ea2;
+  --sev-leve-tint: #e7eef7;
+  --sev-moderado-tint: #faf0e2;
+  --sev-grave-tint: #f1eaf5;
+
+  --well-bom: #9cb79a;
+  --well-mid: #e7cfa0;
+  --well-ruim: #d9b2ae;
+
+  --shadow-card: 0 2px 0 var(--line);
+  --shadow-elevated: 0 12px 26px -12px rgba(63, 90, 67, 0.6);
+  --shadow-btn: 0 8px 18px -8px rgba(63, 90, 67, 0.53);
+  --shadow-fab: 0 10px 20px -6px rgba(63, 90, 67, 0.53);
+  --shadow-tabbar: 0 -8px 24px -16px rgba(40, 30, 20, 0.3);
+  --shadow-sheet: 0 -16px 40px -12px rgba(0, 0, 0, 0.4);
+  --shadow-toast: 0 12px 28px -10px rgba(0, 0, 0, 0.5);
+
+  --font-display: 'Schibsted Grotesk', system-ui, sans-serif;
+  --font-sans: 'Hanken Grotesk', system-ui, sans-serif;
+
+  --screen-px: 20px;
+  --tap-min: 44px;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: #f4eee0;
+  color: #3a352e;
+  font-family: 'Hanken Grotesk', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Hide scrollbars while keeping scroll behavior. */
+* {
+  scrollbar-width: none;
+}
+*::-webkit-scrollbar {
+  display: none;
+}
+
+/* Safe-area helpers for notch / home indicator. */
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.safe-x {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}

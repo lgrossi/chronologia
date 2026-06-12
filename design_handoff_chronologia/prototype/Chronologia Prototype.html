@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Chronologia · Protótipo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Schibsted+Grotesk:wght@500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin: 0; height: 100%; background: #E7E1D6; overflow: hidden; }
+  * { box-sizing: border-box; }
+  ::-webkit-scrollbar { width: 0; height: 0; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: none; } }
+  button { font-family: inherit; -webkit-tap-highlight-color: transparent; }
+  textarea, input { -webkit-appearance: none; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="hf-shell.jsx"></script>
+<script type="text/babel" src="proto-core.jsx"></script>
+<script type="text/babel" src="proto-hoje.jsx"></script>
+<script type="text/babel" src="proto-registro.jsx"></script>
+<script type="text/babel" src="proto-evento.jsx"></script>
+<script type="text/babel" src="proto-linha.jsx"></script>
+<script type="text/babel" src="proto-tend.jsx"></script>
+<script type="text/babel" src="proto-perfil.jsx"></script>
+
+<script type="text/babel">
+const { useState, useEffect } = React;
+const { Device, StatusBar, HomeIndicator, Screen, TabBar, Toast, FL } = window;
+const { Hoje, Registro, AddEvento, Linha, Tend, Perfil } = window;
+
+const STORE = 'chronologia_proto_v1';
+const seedWeek = [['S','leve'],['T','leve'],['Q','moderado'],['Q','grave'],['S','leve'],['S',null],['D',null,true]];
+
+function App() {
+  const [tab, setTab] = useState('hoje');
+  const [overlay, setOverlay] = useState(null); // 'registro' | 'evento' | null
+  const [filter, setFilter] = useState('tudo');
+  const [today, setToday] = useState(null); // null or logged object
+  const [toast, setToast] = useState(null);
+
+  // persist today's log + tab
+  useEffect(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem(STORE) || '{}');
+      if (s.today !== undefined) setToday(s.today);
+      if (s.tab) setTab(s.tab);
+    } catch (e) {}
+  }, []);
+  useEffect(() => {
+    try { localStorage.setItem(STORE, JSON.stringify({ today, tab })); } catch (e) {}
+  }, [today, tab]);
+
+  const flash = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2200); };
+
+  const data = { week: seedWeek, today };
+
+  const screens = {
+    hoje: <Hoje data={data} onRegistrar={() => setOverlay('registro')} onOpenLinha={() => setTab('linha')} />,
+    linha: <Linha filter={filter} setFilter={setFilter} onAddEvento={() => setOverlay('evento')} />,
+    tend: <Tend />,
+    perfil: <Perfil />,
+  };
+  const titles = { hoje: null, linha: null, tend: null, perfil: 'Perfil' };
+
+  return (
+    <Device>
+      <StatusBar />
+      <Screen key={tab}>
+        {tab === 'perfil' && <div style={{ fontFamily: FL.display, fontSize: 26, fontWeight: 700, marginBottom: 16 }}>Perfil</div>}
+        {tab === 'tend' && null}
+        {screens[tab]}
+      </Screen>
+
+      <TabBar active={tab} onTab={(t) => { setOverlay(null); setTab(t); }} onFab={() => setOverlay('evento')} />
+
+      {overlay === 'registro' && (
+        <Registro initial={today} onClose={() => setOverlay(null)}
+          onSave={(log) => { setToday(log); setOverlay(null); setTab('hoje'); flash(log.sev ? 'Dia registrado' : 'Bom dia registrado'); }} />
+      )}
+      {overlay === 'evento' && (
+        <AddEvento onClose={() => setOverlay(null)}
+          onSave={(type) => { setOverlay(null); flash(type === 'infusão' ? 'Infusão adicionada' : 'Evento adicionado'); }} />
+      )}
+
+      {toast && <Toast msg={toast} />}
+      <HomeIndicator />
+    </Device>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

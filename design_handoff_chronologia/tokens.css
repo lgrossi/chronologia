@@ -1,0 +1,90 @@
+/*
+ * Chronologia design tokens as CSS custom properties.
+ * Framework-agnostic alternative to the Tailwind config — import this in
+ * globals.css if you are NOT using Tailwind, or alongside it for runtime theming.
+ */
+:root {
+  /* surfaces */
+  --paper: #F4EEE0;
+  --card: #FBF7EC;
+  --device: #E7E1D6;
+
+  /* text */
+  --ink: #3A352E;
+  --ink-soft: #6F685B;
+  --ink-faint: #A79F8E;
+
+  /* lines */
+  --line: #E3DAC6;
+  --line-soft: #EDE6D6;
+
+  /* accent — Floresta */
+  --accent: #3F5A43;
+  --accent-deep: #33492F;
+  --accent-soft: #E5ECDF;
+  --accent-on: #F4EEE0;
+
+  /* severity inks — symptom intensity ONLY */
+  --sev-leve: #3F6DB0;
+  --sev-moderado: #E0892B;
+  --sev-grave: #8A4EA2;
+  --sev-leve-tint: #E7EEF7;
+  --sev-moderado-tint: #FAF0E2;
+  --sev-grave-tint: #F1EAF5;
+
+  /* wellbeing tints */
+  --well-bom: #9CB79A;
+  --well-mid: #E7CFA0;
+  --well-ruim: #D9B2AE;
+
+  /* radii */
+  --r-md: 11px;
+  --r-lg: 14px;
+  --r-xl: 16px;
+  --r-2xl: 20px;
+  --r-3xl: 26px;
+  --r-fab: 18px;
+
+  /* shadows */
+  --shadow-card: 0 2px 0 var(--line);
+  --shadow-elevated: 0 12px 26px -12px rgba(63,90,67,0.6);
+  --shadow-btn: 0 8px 18px -8px rgba(63,90,67,0.53);
+  --shadow-fab: 0 10px 20px -6px rgba(63,90,67,0.53);
+  --shadow-tabbar: 0 -8px 24px -16px rgba(40,30,20,0.3);
+  --shadow-sheet: 0 -16px 40px -12px rgba(0,0,0,0.4);
+  --shadow-toast: 0 12px 28px -10px rgba(0,0,0,0.5);
+
+  /* type */
+  --font-display: "Schibsted Grotesk", system-ui, sans-serif;
+  --font-sans: "Hanken Grotesk", system-ui, sans-serif;
+
+  /* layout */
+  --screen-px: 20px;
+  --tap-min: 44px;
+}
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: none; } }
+
+/* base helpers */
+.cg-card {
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-2xl);
+  box-shadow: var(--shadow-card);
+}
+.cg-btn-primary {
+  background: var(--accent);
+  color: var(--accent-on);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-btn);
+  font-family: var(--font-sans);
+  font-weight: 700;
+}
+.cg-btn-secondary {
+  background: var(--card);
+  color: var(--ink);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-xl);
+  font-weight: 700;
+}

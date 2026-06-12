@@ -1,0 +1,119 @@
+{
+  "$meta": {
+    "name": "Chronologia Design Tokens",
+    "theme": "Caderno / Floresta",
+    "description": "Warm paper-diary aesthetic. Neutral charcoal-on-cream surfaces; a single Floresta-green accent for primary actions; the user's notebook inks (blue/orange/purple) reserved exclusively for symptom severity.",
+    "baseUnit": "4px",
+    "fonts": {
+      "display": "Schibsted Grotesk",
+      "sans": "Hanken Grotesk",
+      "googleFontsUrl": "https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Schibsted+Grotesk:wght@500;600;700;800&display=swap"
+    }
+  },
+
+  "color": {
+    "surface": {
+      "paper":     { "value": "#F4EEE0", "use": "App background / page canvas" },
+      "card":      { "value": "#FBF7EC", "use": "Card & input surfaces (one step lighter than paper)" },
+      "device":    { "value": "#E7E1D6", "use": "Letterbox behind the phone (prototype only)" }
+    },
+    "text": {
+      "ink":       { "value": "#3A352E", "use": "Primary text (warm charcoal — intentionally lifted from pure black)" },
+      "soft":      { "value": "#6F685B", "use": "Secondary text, labels" },
+      "faint":     { "value": "#A79F8E", "use": "Tertiary text, hints, disabled" }
+    },
+    "line": {
+      "DEFAULT":   { "value": "#E3DAC6", "use": "Borders, dividers, the solid card under-shadow" },
+      "soft":      { "value": "#EDE6D6", "use": "Subtle track fills (progress/bar backgrounds)" }
+    },
+    "accent": {
+      "DEFAULT":   { "value": "#3F5A43", "use": "Floresta green — primary actions, FAB, active nav, selected states, wordmark" },
+      "deep":      { "value": "#33492F", "use": "Pressed/hover of accent" },
+      "soft":      { "value": "#E5ECDF", "use": "Accent tint — mood card bg, selected-secondary bg, icon chips" },
+      "on":        { "value": "#F4EEE0", "use": "Foreground on accent surfaces (matches paper, warmer than #fff)" }
+    },
+    "severity": {
+      "$note": "The user's own notebook ink colors. NEVER repurpose these for UI chrome — they exclusively encode symptom intensity.",
+      "leve":      { "value": "#3F6DB0", "use": "Mild — blue" },
+      "moderado":  { "value": "#E0892B", "use": "Moderate — orange" },
+      "grave":     { "value": "#8A4EA2", "use": "Severe — purple" },
+      "leveTint":     { "value": "#E7EEF7" },
+      "moderadoTint": { "value": "#FAF0E2" },
+      "graveTint":    { "value": "#F1EAF5" }
+    },
+    "wellbeing": {
+      "$note": "Soft, calming tints for the month proportion bar in Tendências. Deliberately muted — not alarm colors.",
+      "bom":       { "value": "#9CB79A", "use": "Good-day segment" },
+      "mid":       { "value": "#E7CFA0", "use": "So-so segment" },
+      "ruim":      { "value": "#D9B2AE", "use": "Hard-day segment" }
+    }
+  },
+
+  "radius": {
+    "sm":   { "value": "8px",  "use": "Checkboxes, small chips' inner" },
+    "md":   { "value": "11px", "use": "Filter chips, small pills" },
+    "lg":   { "value": "14px", "use": "Buttons (secondary), list rows, reminder strip" },
+    "xl":   { "value": "16px", "use": "Primary buttons, inputs" },
+    "2xl":  { "value": "20px", "use": "Cards (default)" },
+    "3xl":  { "value": "26px", "use": "Bottom sheet top corners" },
+    "pill": { "value": "9999px", "use": "Avatars, mood circles, FAB-adjacent dots" },
+    "fab":  { "value": "18px", "use": "Floating + button (squircle)" }
+  },
+
+  "shadow": {
+    "card":        { "value": "0 2px 0 #E3DAC6", "use": "Default card — a solid 2px 'paper' edge, not a blur. Signature look." },
+    "elevated":    { "value": "0 12px 26px -12px rgba(63,90,67,0.6)", "use": "Accent starter card" },
+    "buttonPrimary":{ "value": "0 8px 18px -8px rgba(63,90,67,0.53)", "use": "Primary button" },
+    "fab":         { "value": "0 10px 20px -6px rgba(63,90,67,0.53)", "use": "Floating action button" },
+    "tabbar":      { "value": "0 -8px 24px -16px rgba(40,30,20,0.3)", "use": "Bottom nav top edge" },
+    "sheet":       { "value": "0 -16px 40px -12px rgba(0,0,0,0.4)", "use": "Day-detail bottom sheet" },
+    "toast":       { "value": "0 12px 28px -10px rgba(0,0,0,0.5)", "use": "Confirmation toast" }
+  },
+
+  "typography": {
+    "$note": "Sizes in px as used. Display = Schibsted Grotesk (headings/numbers). Sans = Hanken Grotesk (everything else).",
+    "greeting":     { "font": "display", "size": "30px", "weight": 700, "lineHeight": "1.0", "use": "Bom dia, Ana" },
+    "screenTitle":  { "font": "display", "size": "26px", "weight": 700, "use": "Junho, screen H1" },
+    "sectionLg":    { "font": "display", "size": "24px", "weight": 700, "use": "Day-detail date, month name" },
+    "cardTitle":    { "font": "display", "size": "21px", "weight": 600, "lineHeight": "1.15", "use": "Starter card headline" },
+    "sectionMd":    { "font": "display", "size": "18px", "weight": 600, "use": "Mood prompt, section heads" },
+    "sectionSm":    { "font": "display", "size": "16-17px", "weight": 600, "use": "Sub-section heads (Sintomas, etc.)" },
+    "statNumber":   { "font": "display", "size": "30px", "weight": 700, "use": "'dia 6' infusion counter" },
+    "bodyLg":       { "font": "sans", "size": "16px", "weight": 700, "use": "Button labels" },
+    "body":         { "font": "sans", "size": "15px", "weight": 500, "use": "List items, primary body" },
+    "bodySm":       { "font": "sans", "size": "14px", "weight": 500, "use": "Secondary lines" },
+    "label":        { "font": "sans", "size": "13px", "weight": 600, "use": "Eyebrow labels, links" },
+    "caption":      { "font": "sans", "size": "11.5-12px", "weight": 500, "use": "Day letters, hints, nav labels" },
+    "brandEyebrow": { "font": "display", "size": "16px", "weight": 600, "letterSpacing": "0.02em", "use": "Chronologia wordmark (accent color)" }
+  },
+
+  "spacing": {
+    "$note": "4px base. Screen horizontal padding is 20px. Common vertical rhythm below.",
+    "screenPaddingX": "20px",
+    "screenPaddingTop": "54px (clears status bar)",
+    "screenPaddingBottom": "96px (clears tab bar)",
+    "cardPadding": "16-20px",
+    "gapTight": "6px",
+    "gapDefault": "10px",
+    "gapLoose": "16px",
+    "sectionGap": "16-18px"
+  },
+
+  "device": {
+    "$note": "Prototype renders a fixed iPhone-ish frame that scales to fit the viewport.",
+    "designWidth": "390px",
+    "designHeight": "844px",
+    "screenRadius": "42px",
+    "bezelRadius": "52px",
+    "statusBarHeight": "50px",
+    "tabBarHeight": "~84px incl. safe area",
+    "minTouchTarget": "44px"
+  },
+
+  "motion": {
+    "fadeIn": { "value": "fadeIn .2s", "keyframes": "from {opacity:0; transform:translateY(6px)} to {opacity:1}", "use": "Progressive reveal of gate/report blocks" },
+    "slideUp": { "value": "slideUp .25s", "keyframes": "from {transform:translateY(100%)} to {transform:none}", "use": "Bottom sheet entrance" },
+    "control": { "value": "all .15s", "use": "Mood/selection state changes" },
+    "toastDuration": "2200ms"
+  }
+}
