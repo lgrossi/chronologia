@@ -64,6 +64,10 @@ export class DexieRepository implements Repository {
     return this.db.events.where('date').between(from, to, true, true).sortBy('date');
   }
 
+  async getEvent(id: string): Promise<HealthEvent | null> {
+    return (await this.db.events.get(id)) ?? null;
+  }
+
   async putEvent(e: HealthEvent): Promise<void> {
     await this.db.events.put(e);
   }
@@ -86,6 +90,10 @@ export class DexieRepository implements Repository {
 
   async putMedication(m: Medication): Promise<void> {
     await this.db.medications.put(m);
+  }
+
+  async deleteMedication(id: string): Promise<void> {
+    await this.db.medications.delete(id);
   }
 
   async getReminders(): Promise<ReminderSettings> {

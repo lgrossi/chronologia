@@ -1,19 +1,25 @@
 /**
  * Global UI state (Zustand). Holds only ephemeral chrome state that is shared
- * across screens — the active overlay, the Linha filter chip, and a `tab`
- * mirror for components that want it. Persistent data lives in Dexie and is
- * read through the reactive hooks in `@/data/hooks`; nothing domain-shaped
- * belongs here.
+ * across screens — the active overlay and a `tab` mirror for components that
+ * want it. Persistent data lives in Dexie and is read through the reactive
+ * hooks in `@/data/hooks`; nothing domain-shaped belongs here. The Linha filter
+ * is screen-local state, owned by Linha itself.
  *
  * Routing is owned by react-router (App derives the active tab from the URL),
  * so `tab`/`setTab` are a convenience mirror, not the source of truth.
+ *
+ * The evento overlay carries an optional `eventId`: present => edit an existing
+ * event, absent => create a new one.
  */
 import { create } from 'zustand';
 import { localDayKey } from '@/lib/date';
 
 export type Tab = 'hoje' | 'linha' | 'tendencias' | 'perfil';
 
-export type Overlay = { kind: 'registro' | 'evento'; dateKey: string } | null;
+export type Overlay =
+  | { kind: 'registro'; dateKey: string }
+  | { kind: 'evento'; dateKey: string; eventId?: string }
+  | null;
 
 interface AppState {
   tab: Tab;
@@ -21,11 +27,8 @@ interface AppState {
 
   overlay: Overlay;
   openRegistro: (dateKey?: string) => void;
-  openEvento: (dateKey?: string) => void;
+  openEvento: (dateKey?: string, eventId?: string) => void;
   closeOverlay: () => void;
-
-  filter: string;
-  setFilter: (filter: string) => void;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -34,9 +37,7 @@ export const useStore = create<AppState>((set) => ({
 
   overlay: null,
   openRegistro: (dateKey = localDayKey()) => set({ overlay: { kind: 'registro', dateKey } }),
-  openEvento: (dateKey = localDayKey()) => set({ overlay: { kind: 'evento', dateKey } }),
+  openEvento: (dateKey = localDayKey(), eventId) =>
+    set({ overlay: { kind: 'evento', dateKey, eventId } }),
   closeOverlay: () => set({ overlay: null }),
-
-  filter: 'tudo',
-  setFilter: (filter) => set({ filter }),
 }));

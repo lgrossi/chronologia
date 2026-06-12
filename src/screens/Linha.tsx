@@ -1,28 +1,33 @@
 /**
- * Linha do tempo — browse history (SCREENS.md §4, proto-linha.jsx).
+ * Linha do tempo — browse history.
  *
- * Reads REAL data for the shown month: DayLogs + HealthEvents in range. The
- * prototype's mock month is gone — severity colors, infusão markers, symptom
- * tags and the day-detail body all derive from the repository via hooks.
+ * Reads REAL data for the SHOWN month: DayLogs + HealthEvents in range. The
+ * shown month is navigable (‹ / ›) so the user can walk back through history
+ * AND forward to future appointments / the next infusion. Severity inks are
+ * SACRED — they only ever color symptom intensity. Event markers (any of the
+ * six EventTypes) use the neutral ink / single accent, never the inks.
  *
- * Navigation/overlay actions arrive as props (never the store): `setFilter`
- * lifts the active chip to the parent so a deep-link can preselect it;
- * `onEditDay` closes the sheet and lets the parent open Registro for that date;
- * `onAddEvento` is wired for the FAB elsewhere but kept on the contract.
+ * Filtering is screen-local: a single on-brand dropdown defaulting to 'Tudo'
+ * (no filter). Options are every non-archived symptom and every event type.
+ *
+ * Every day is tappable — logged, empty, past or future — opening DayDetail,
+ * which lists that day's events (each tappable to edit) and always offers two
+ * actions: register/edit the day's symptoms, or add an event.
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { HWave } from '@/components/HWave';
 import { HFace } from '@/components/HFace';
-import { Icon } from '@/components/Icon';
+import { Icon, type IconName } from '@/components/Icon';
 import { Btn } from '@/components/Btn';
 import { SevDots } from '@/components/SevDots';
 import { BottomSheet } from '@/components/BottomSheet';
 import { COLORS, SEV } from '@/theme/tokens';
-import type { DayLog, Severity } from '@/lib/types';
+import type { DayLog, EventType, HealthEvent, Severity } from '@/lib/types';
 import {
   addDays,
   capitalize,
+  daysBetween,
   daysInMonth,
   formatLongPt,
   localDayKey,
@@ -32,19 +37,50 @@ import {
   parseDayKey,
   WEEKDAY_LETTERS_PT,
 } from '@/lib/date';
-import { useDaysInRange, useEventsInRange } from '@/data/hooks';
+import { useDaysInRange, useEventsInRange, useSymptoms } from '@/data/hooks';
 
 export interface LinhaProps {
-  filter: string;
-  setFilter: (f: string) => void;
   onEditDay: (dateKey: string) => void;
-  onAddEvento: () => void;
+  onAddEvento: (dateKey: string) => void;
+  onEditEvento: (eventId: string, dateKey: string) => void;
 }
 
 type View = 'cal' | 'dia';
 
-const FILTERS = ['tudo', 'diarreia', 'pontadas', 'cansaço', 'infusão'] as const;
 const WD_SHORT = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom'] as const;
+
+/** How far the month switcher may roam from the current month, in months. */
+const MONTH_CLAMP = 24;
+
+/**
+ * Event-type presentation, mirroring AddEvento's TYPES so the timeline and the
+ * editor speak the same language. Icons/labels are NEUTRAL chrome — the marker
+ * color is always ink/accent, never a severity ink.
+ */
+const EVENT_META: Record<EventType, { label: string; icon: IconName }> = {
+  infusao: { label: 'infusão', icon: 'drop' },
+  exame: { label: 'exame', icon: 'flask' },
+  consulta: { label: 'consulta', icon: 'user' },
+  remedio: { label: 'remédio', icon: 'plus' },
+  resultado: { label: 'resultado', icon: 'list' },
+  outro: { label: 'outro', icon: 'spark' },
+};
+
+const EVENT_ORDER: readonly EventType[] = [
+  'infusao',
+  'exame',
+  'consulta',
+  'remedio',
+  'resultado',
+  'outro',
+];
+
+/**
+ * Filter token. 'tudo' is the default (no filter). Symptom and event filters are
+ * namespaced so a symptom literally named "exame" can't collide with the event
+ * type. `sym:` matches by symptom name; `evt:` matches by event type.
+ */
+type Filter = 'tudo' | `sym:${string}` | `evt:${EventType}`;
 
 /** Monday-first column index (0..6) the 1st of the month lands on. */
 function leadingBlanks(monthStart: string): number {
@@ -58,40 +94,73 @@ function weekdayShortPt(key: string): string {
   return WD_SHORT[(dow + 6) % 7];
 }
 
-export function Linha({ filter, setFilter, onEditDay, onAddEvento }: LinhaProps) {
-  void onAddEvento; // wired on the contract; the FAB triggers it from the shell
-  // Which month is shown — defaults to the current month. (No in-screen month
-  // nav is specified for Linha; Tendências owns the ‹ › month switcher.)
-  const [month] = useState<string>(() => localDayKey());
+/** Shift a month-anchor key by `n` whole months, staying on the 1st. */
+function shiftMonth(monthKey: string, n: number): string {
+  const d = parseDayKey(monthKey);
+  return localDayKey(new Date(d.getFullYear(), d.getMonth() + n, 1));
+}
+
+export function Linha({ onEditDay, onAddEvento, onEditEvento }: LinhaProps) {
+  // Which month is shown — defaults to the current month, navigable both ways.
+  const [shownMonth, setShownMonth] = useState<string>(() => monthStartKey(localDayKey()));
   const [view, setView] = useState<View>('cal');
+  const [filter, setFilter] = useState<Filter>('tudo');
   const [selected, setSelected] = useState<string | null>(null);
 
-  const monthStart = monthStartKey(month);
-  const monthEnd = monthEndKey(month);
+  const monthStart = monthStartKey(shownMonth);
+  const monthEnd = monthEndKey(shownMonth);
 
   const days = useDaysInRange(monthStart, monthEnd);
   const events = useEventsInRange(monthStart, monthEnd);
+  const symptoms = useSymptoms();
 
-  const dayByKey = new Map<string, DayLog>(days.map((d) => [d.date, d]));
-  const infusionByKey = new Set<string>(
-    events.filter((e) => e.type === 'infusao').map((e) => e.date),
+  const dayByKey = useMemo(
+    () => new Map<string, DayLog>(days.map((d) => [d.date, d])),
+    [days],
   );
+
+  // All events for a day (any type), keyed by date. Drives markers + detail.
+  const eventsByKey = useMemo(() => {
+    const m = new Map<string, HealthEvent[]>();
+    for (const e of events) {
+      const list = m.get(e.date);
+      if (list) list.push(e);
+      else m.set(e.date, [e]);
+    }
+    return m;
+  }, [events]);
+
+  const activeSymptoms = useMemo(
+    () => symptoms.filter((s) => !s.archived),
+    [symptoms],
+  );
+
+  // Clamp month navigation to a generous ±24-month window so history and
+  // upcoming appointments are reachable without wandering off into empty years.
+  const thisMonth = monthStartKey(localDayKey());
+  const offset = Math.round(daysBetween(thisMonth, shownMonth) / 30);
+  const canPrev = offset > -MONTH_CLAMP;
+  const canNext = offset < MONTH_CLAMP;
 
   const matches = (key: string): boolean => {
     if (filter === 'tudo') return true;
-    if (filter === 'infusão') return infusionByKey.has(key);
+    if (filter.startsWith('evt:')) {
+      const type = filter.slice(4) as EventType;
+      return (eventsByKey.get(key) ?? []).some((e) => e.type === type);
+    }
+    // sym:<name>
+    const name = filter.slice(4).toLowerCase();
     const log = dayByKey.get(key);
-    if (!log) return false;
-    return log.symptoms.some((s) => s.name.toLowerCase() === filter);
+    return !!log && log.symptoms.some((s) => s.name.toLowerCase() === name);
   };
 
-  const total = daysInMonth(month);
+  const total = daysInMonth(shownMonth);
   const blanks = leadingBlanks(monthStart);
 
   return (
     <div className="min-h-screen bg-paper px-5 pt-14 pb-28 font-sans text-ink">
       <div className="mx-auto w-full" style={{ maxWidth: 480 }}>
-        {/* Header: month + Calendário|Diário toggle */}
+        {/* Header: ‹ month › + Calendário|Diário toggle */}
         <div
           style={{
             display: 'flex',
@@ -100,8 +169,22 @@ export function Linha({ filter, setFilter, onEditDay, onAddEvento }: LinhaProps)
             marginBottom: 14,
           }}
         >
-          <div style={{ fontFamily: 'Schibsted Grotesk, sans-serif', fontSize: 26, fontWeight: 700 }}>
-            {capitalize(monthNamePt(month))}
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <MonthArrow dir="prev" disabled={!canPrev} onClick={() => setShownMonth((m) => shiftMonth(m, -1))} />
+            <div
+              style={{
+                fontFamily: 'Schibsted Grotesk, sans-serif',
+                fontSize: 24,
+                fontWeight: 700,
+                minWidth: 0,
+              }}
+            >
+              {capitalize(monthNamePt(shownMonth))}{' '}
+              <span style={{ color: COLORS.faint, fontWeight: 600 }}>
+                {parseDayKey(shownMonth).getFullYear()}
+              </span>
+            </div>
+            <MonthArrow dir="next" disabled={!canNext} onClick={() => setShownMonth((m) => shiftMonth(m, 1))} />
           </div>
           <div
             style={{
@@ -119,12 +202,12 @@ export function Linha({ filter, setFilter, onEditDay, onAddEvento }: LinhaProps)
                   key={v}
                   onClick={() => setView(v)}
                   style={{
-                    padding: '7px 14px',
+                    padding: '7px 12px',
                     borderRadius: 10,
                     border: 'none',
                     cursor: 'pointer',
                     fontFamily: 'Hanken Grotesk, sans-serif',
-                    fontSize: 13.5,
+                    fontSize: 13,
                     fontWeight: on ? 700 : 500,
                     background: on ? COLORS.accent : 'transparent',
                     color: on ? COLORS.onAccent : COLORS.soft,
@@ -137,32 +220,12 @@ export function Linha({ filter, setFilter, onEditDay, onAddEvento }: LinhaProps)
           </div>
         </div>
 
-        {/* Filter chips */}
-        <div style={{ display: 'flex', gap: 7, marginBottom: 16, flexWrap: 'wrap' }}>
-          {FILTERS.map((f) => {
-            const on = filter === f;
-            return (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                style={{
-                  padding: '7px 13px',
-                  borderRadius: 11,
-                  cursor: 'pointer',
-                  fontFamily: 'Hanken Grotesk, sans-serif',
-                  fontSize: 13,
-                  fontWeight: on ? 700 : 500,
-                  background: on ? COLORS.ink : 'transparent',
-                  color: on ? COLORS.onAccent : COLORS.soft,
-                  border: `1.5px solid ${on ? COLORS.ink : COLORS.line}`,
-                  minHeight: 34,
-                }}
-              >
-                {f}
-              </button>
-            );
-          })}
-        </div>
+        {/* Filter dropdown (defaults to 'Tudo' = no filter) */}
+        <FilterSelect
+          value={filter}
+          onChange={setFilter}
+          symptoms={activeSymptoms.map((s) => s.name)}
+        />
 
         {view === 'cal' ? (
           <CalendarView
@@ -170,7 +233,7 @@ export function Linha({ filter, setFilter, onEditDay, onAddEvento }: LinhaProps)
             total={total}
             blanks={blanks}
             dayByKey={dayByKey}
-            infusionByKey={infusionByKey}
+            eventsByKey={eventsByKey}
             matches={matches}
             selected={selected}
             onSelect={setSelected}
@@ -180,7 +243,9 @@ export function Linha({ filter, setFilter, onEditDay, onAddEvento }: LinhaProps)
             monthStart={monthStart}
             total={total}
             dayByKey={dayByKey}
-            infusionByKey={infusionByKey}
+            eventsByKey={eventsByKey}
+            matches={matches}
+            filtered={filter !== 'tudo'}
             onSelect={setSelected}
           />
         )}
@@ -190,12 +255,111 @@ export function Linha({ filter, setFilter, onEditDay, onAddEvento }: LinhaProps)
         <DayDetail
           dateKey={selected}
           log={dayByKey.get(selected) ?? null}
-          hasInfusion={infusionByKey.has(selected)}
-          infusionNote={events.find((e) => e.type === 'infusao' && e.date === selected)?.note}
+          events={eventsByKey.get(selected) ?? []}
           onEditDay={onEditDay}
+          onAddEvento={onAddEvento}
+          onEditEvento={onEditEvento}
           onClose={() => setSelected(null)}
         />
       )}
+    </div>
+  );
+}
+
+function MonthArrow({
+  dir,
+  disabled,
+  onClick,
+}: {
+  dir: 'prev' | 'next';
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={dir === 'prev' ? 'mês anterior' : 'próximo mês'}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 32,
+        height: 32,
+        borderRadius: 10,
+        background: COLORS.card,
+        border: `1.5px solid ${COLORS.line}`,
+        cursor: disabled ? 'default' : 'pointer',
+        opacity: disabled ? 0.35 : 1,
+        flexShrink: 0,
+      }}
+    >
+      <Icon name={dir === 'prev' ? 'chevL' : 'chevR'} size={18} color={COLORS.soft} />
+    </button>
+  );
+}
+
+function FilterSelect({
+  value,
+  onChange,
+  symptoms,
+}: {
+  value: Filter;
+  onChange: (f: Filter) => void;
+  symptoms: string[];
+}) {
+  return (
+    <div style={{ position: 'relative', marginBottom: 16 }}>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as Filter)}
+        style={{
+          appearance: 'none',
+          WebkitAppearance: 'none',
+          MozAppearance: 'none',
+          width: '100%',
+          padding: '10px 38px 10px 14px',
+          borderRadius: 13,
+          border: `1.5px solid ${value === 'tudo' ? COLORS.line : COLORS.accent}`,
+          background: COLORS.card,
+          color: value === 'tudo' ? COLORS.soft : COLORS.ink,
+          fontFamily: 'Hanken Grotesk, sans-serif',
+          fontSize: 14,
+          fontWeight: value === 'tudo' ? 500 : 700,
+          cursor: 'pointer',
+        }}
+      >
+        <option value="tudo">Tudo</option>
+        {symptoms.length > 0 && (
+          <optgroup label="Sintomas">
+            {symptoms.map((name) => (
+              <option key={`sym:${name}`} value={`sym:${name}`}>
+                {name}
+              </option>
+            ))}
+          </optgroup>
+        )}
+        <optgroup label="Eventos">
+          {EVENT_ORDER.map((t) => (
+            <option key={`evt:${t}`} value={`evt:${t}`}>
+              {EVENT_META[t].label}
+            </option>
+          ))}
+        </optgroup>
+      </select>
+      {/* Custom chevron — the native select arrow is hidden via appearance:none. */}
+      <span
+        style={{
+          position: 'absolute',
+          right: 12,
+          top: '50%',
+          transform: 'translateY(-50%)',
+          pointerEvents: 'none',
+          display: 'inline-flex',
+        }}
+      >
+        <Icon name="chevR" size={16} color={COLORS.faint} strokeWidth={2.5} />
+      </span>
     </div>
   );
 }
@@ -205,7 +369,7 @@ interface CalendarViewProps {
   total: number;
   blanks: number;
   dayByKey: Map<string, DayLog>;
-  infusionByKey: Set<string>;
+  eventsByKey: Map<string, HealthEvent[]>;
   matches: (key: string) => boolean;
   selected: string | null;
   onSelect: (key: string) => void;
@@ -216,7 +380,7 @@ function CalendarView({
   total,
   blanks,
   dayByKey,
-  infusionByKey,
+  eventsByKey,
   matches,
   selected,
   onSelect,
@@ -252,9 +416,13 @@ function CalendarView({
         {Array.from({ length: total }).map((_, i) => {
           const key = addDays(monthStart, i);
           const sev = dayByKey.get(key)?.overallSeverity ?? null;
-          const infusao = infusionByKey.has(key);
+          const dayEvents = eventsByKey.get(key) ?? [];
+          const hasEvents = dayEvents.length > 0;
           const dim = !matches(key);
           const dayNum = i + 1;
+          // Marker ink is neutral: white over a filled severity cell, ink
+          // otherwise. NEVER a severity ink (those are sacred to symptoms).
+          const markerInk = sev ? '#fff' : COLORS.ink;
           return (
             <button
               key={key}
@@ -264,8 +432,8 @@ function CalendarView({
                 borderRadius: 9,
                 position: 'relative',
                 padding: 4,
-                border: infusao
-                  ? `1.5px solid ${COLORS.ink}`
+                border: hasEvents
+                  ? `1.5px solid ${sev ? '#fff' : COLORS.ink}`
                   : `1.5px solid ${sev ? 'transparent' : COLORS.line}`,
                 background: sev ? SEV[sev] : COLORS.card,
                 opacity: dim ? 0.25 : 1,
@@ -286,18 +454,8 @@ function CalendarView({
               >
                 {dayNum}
               </span>
-              {infusao && (
-                <span
-                  style={{
-                    position: 'absolute',
-                    bottom: 3,
-                    right: 3,
-                    width: 8,
-                    height: 8,
-                    borderRadius: '50%',
-                    border: `2px solid ${sev ? '#fff' : COLORS.ink}`,
-                  }}
-                />
+              {hasEvents && (
+                <DayMarker count={dayEvents.length} type={dayEvents[0].type} ink={markerInk} />
               )}
             </button>
           );
@@ -327,12 +485,41 @@ function CalendarView({
           style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: COLORS.soft }}
         >
           <span
-            style={{ width: 11, height: 11, borderRadius: '50%', border: `2px solid ${COLORS.ink}` }}
+            style={{ width: 11, height: 11, borderRadius: 3, border: `1.5px solid ${COLORS.ink}` }}
           />
-          infusão
+          evento
         </span>
       </div>
     </>
+  );
+}
+
+/**
+ * Calendar day marker for one or more events. A single event shows its icon; a
+ * cluster shows a count. Ink is always neutral (passed in), never a severity.
+ */
+function DayMarker({ count, type, ink }: { count: number; type: EventType; ink: string }) {
+  return (
+    <span
+      style={{
+        position: 'absolute',
+        bottom: 2,
+        right: 2,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minWidth: 13,
+        height: 13,
+        borderRadius: 7,
+        padding: count > 1 ? '0 3px' : 0,
+      }}
+    >
+      {count > 1 ? (
+        <span style={{ fontSize: 9, fontWeight: 700, color: ink, lineHeight: 1 }}>{count}</span>
+      ) : (
+        <Icon name={EVENT_META[type].icon} size={11} color={ink} strokeWidth={2.4} />
+      )}
+    </span>
   );
 }
 
@@ -340,22 +527,33 @@ interface DiarioListProps {
   monthStart: string;
   total: number;
   dayByKey: Map<string, DayLog>;
-  infusionByKey: Set<string>;
+  eventsByKey: Map<string, HealthEvent[]>;
+  matches: (key: string) => boolean;
+  filtered: boolean;
   onSelect: (key: string) => void;
 }
 
-function DiarioList({ monthStart, total, dayByKey, infusionByKey, onSelect }: DiarioListProps) {
-  // Logged days OR infusão days, most recent first.
+function DiarioList({
+  monthStart,
+  total,
+  dayByKey,
+  eventsByKey,
+  matches,
+  filtered,
+  onSelect,
+}: DiarioListProps) {
+  // Days with a log OR any event, most recent first, honoring the filter.
   const rows: string[] = [];
   for (let i = total - 1; i >= 0; i--) {
     const key = addDays(monthStart, i);
-    if (dayByKey.has(key) || infusionByKey.has(key)) rows.push(key);
+    const has = dayByKey.has(key) || eventsByKey.has(key);
+    if (has && matches(key)) rows.push(key);
   }
 
   if (rows.length === 0) {
     return (
       <div style={{ fontSize: 14.5, color: COLORS.soft, padding: '8px 2px' }}>
-        Nada anotado neste mês ainda.
+        {filtered ? 'Nada com esse filtro neste mês.' : 'Nada anotado neste mês ainda.'}
       </div>
     );
   }
@@ -364,7 +562,7 @@ function DiarioList({ monthStart, total, dayByKey, infusionByKey, onSelect }: Di
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {rows.map((key) => {
         const log = dayByKey.get(key) ?? null;
-        const infusao = infusionByKey.has(key);
+        const dayEvents = eventsByKey.get(key) ?? [];
         const dayNum = parseDayKey(key).getDate();
         return (
           <button
@@ -375,7 +573,7 @@ function DiarioList({ monthStart, total, dayByKey, infusionByKey, onSelect }: Di
               gap: 12,
               alignItems: 'center',
               textAlign: 'left',
-              background: infusao ? COLORS.accentSoft : COLORS.card,
+              background: dayEvents.length > 0 ? COLORS.accentSoft : COLORS.card,
               border: `1.5px solid ${COLORS.line}`,
               borderRadius: 16,
               padding: 13,
@@ -400,10 +598,16 @@ function DiarioList({ monthStart, total, dayByKey, infusionByKey, onSelect }: Di
               {log?.overallSeverity ? (
                 <HWave color={SEV[log.overallSeverity]} count={log.waveCount} h={14} w={26} sw={2.6} />
               ) : (
-                <span style={{ fontSize: 13, color: COLORS.soft }}>infusão</span>
+                <span style={{ fontSize: 13, color: COLORS.soft }}>
+                  {dayEvents.length > 0 ? EVENT_META[dayEvents[0].type].label : '—'}
+                </span>
               )}
               <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 6 }}>
-                {infusao && <Tag on>infusão</Tag>}
+                {dayEvents.map((e) => (
+                  <Tag key={e.id} on>
+                    {EVENT_META[e.type].label}
+                  </Tag>
+                ))}
                 {log?.symptoms.slice(0, 2).map((s) => <Tag key={s.name}>{s.name}</Tag>)}
               </div>
             </div>
@@ -436,23 +640,34 @@ function Tag({ children, on }: { children: React.ReactNode; on?: boolean }) {
 interface DayDetailProps {
   dateKey: string;
   log: DayLog | null;
-  hasInfusion: boolean;
-  infusionNote?: string;
+  events: HealthEvent[];
   onEditDay: (dateKey: string) => void;
+  onAddEvento: (dateKey: string) => void;
+  onEditEvento: (eventId: string, dateKey: string) => void;
   onClose: () => void;
 }
 
-function DayDetail({ dateKey, log, hasInfusion, infusionNote, onEditDay, onClose }: DayDetailProps) {
+function DayDetail({
+  dateKey,
+  log,
+  events,
+  onEditDay,
+  onAddEvento,
+  onEditEvento,
+  onClose,
+}: DayDetailProps) {
   const sev: Severity | null = log?.overallSeverity ?? null;
-  const editLink: CSSProperties = {
-    background: 'none',
-    border: 'none',
-    padding: 0,
+  const secondaryAction: CSSProperties = {
+    flex: 1,
+    background: COLORS.card,
+    border: `1.5px solid ${COLORS.line}`,
+    borderRadius: 14,
+    padding: '13px 14px',
     cursor: 'pointer',
-    color: COLORS.accent,
     fontFamily: 'Hanken Grotesk, sans-serif',
     fontSize: 14.5,
     fontWeight: 700,
+    color: COLORS.ink,
   };
 
   return (
@@ -488,22 +703,35 @@ function DayDetail({ dateKey, log, hasInfusion, infusionNote, onEditDay, onClose
         )}
       </div>
 
-      {hasInfusion && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 11,
-            background: COLORS.accentSoft,
-            borderRadius: 14,
-            padding: '13px 15px',
-            marginBottom: 14,
-          }}
-        >
-          <Icon name="drop" size={19} color={COLORS.accent} />
-          <span style={{ fontSize: 15, fontWeight: 600 }}>
-            {infusionNote?.trim() ? infusionNote : 'Infusão'}
-          </span>
+      {/* This day's events — each row tappable to edit. */}
+      {events.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 14 }}>
+          {events.map((e) => (
+            <button
+              key={e.id}
+              onClick={() => {
+                onClose();
+                onEditEvento(e.id, dateKey);
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 11,
+                textAlign: 'left',
+                background: COLORS.accentSoft,
+                border: `1.5px solid ${COLORS.line}`,
+                borderRadius: 14,
+                padding: '12px 14px',
+                cursor: 'pointer',
+              }}
+            >
+              <Icon name={EVENT_META[e.type].icon} size={18} color={COLORS.accent} />
+              <span style={{ flex: 1, fontSize: 15, fontWeight: 600 }}>
+                {e.note?.trim() ? e.note : capitalize(EVENT_META[e.type].label)}
+              </span>
+              <Icon name="pencil" size={15} color={COLORS.faint} />
+            </button>
+          ))}
         </div>
       )}
 
@@ -553,26 +781,33 @@ function DayDetail({ dateKey, log, hasInfusion, infusionNote, onEditDay, onClose
           )}
         </>
       ) : (
-        !hasInfusion && (
+        events.length === 0 && (
           <div style={{ fontSize: 15, color: COLORS.soft, marginBottom: 18 }}>
-            Dia tranquilo, sem sintomas anotados.
+            Nada anotado neste dia ainda.
           </div>
         )
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+      {/* Always-available actions: register/edit the day, or add an event. */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
         <button
-          style={editLink}
+          style={secondaryAction}
           onClick={() => {
             onClose();
-            onEditDay(dateKey);
+            onAddEvento(dateKey);
           }}
         >
-          editar
+          adicionar evento
         </button>
       </div>
-
-      <Btn onClick={onClose}>fechar</Btn>
+      <Btn
+        onClick={() => {
+          onClose();
+          onEditDay(dateKey);
+        }}
+      >
+        {log ? 'editar o dia' : 'registrar o dia'}
+      </Btn>
     </BottomSheet>
   );
 }

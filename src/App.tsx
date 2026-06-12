@@ -112,8 +112,6 @@ function Shell() {
   const navigate = useNavigate();
   const toast = useToast();
   const setTab = useStore((s) => s.setTab);
-  const filter = useStore((s) => s.filter);
-  const setFilter = useStore((s) => s.setFilter);
   const openRegistro = useStore((s) => s.openRegistro);
   const openEvento = useStore((s) => s.openEvento);
 
@@ -168,10 +166,9 @@ function Shell() {
           path="/linha"
           element={
             <Linha
-              filter={filter}
-              setFilter={setFilter}
               onEditDay={(k) => openRegistro(k)}
-              onAddEvento={() => openEvento()}
+              onAddEvento={(k) => openEvento(k)}
+              onEditEvento={(id, k) => openEvento(k, id)}
             />
           }
         />
@@ -218,10 +215,17 @@ function OverlayHost() {
   return (
     <AddEvento
       dateKey={overlay.dateKey}
+      eventId={overlay.eventId}
       onClose={closeOverlay}
-      onSaved={(type) => {
+      onSaved={(type, mode) => {
         closeOverlay();
-        toast.show(type === 'infusao' ? 'Infusão adicionada' : 'Evento adicionado');
+        if (mode === 'deleted') {
+          toast.show('Evento removido');
+        } else if (mode === 'updated') {
+          toast.show('Evento atualizado');
+        } else {
+          toast.show(type === 'infusao' ? 'Infusão adicionada' : 'Evento adicionado');
+        }
       }}
     />
   );

@@ -114,6 +114,38 @@ describe('HealthEvent put/list/delete', () => {
     expect(listed.map((e) => e.id)).toEqual(['a', 'b']);
   });
 
+  it('getEvent returns the stored event and null for a missing id', async () => {
+    const event = makeEvent('e1', '2026-03-05');
+    await repo.putEvent(event);
+
+    expect(await repo.getEvent('e1')).toEqual(event);
+    expect(await repo.getEvent('nope')).toBeNull();
+  });
+
+  it('putEvent on an existing id updates in place without duplicating', async () => {
+    await repo.putEvent(makeEvent('e1', '2026-03-05', { note: 'antes' }));
+    await repo.putEvent(makeEvent('e1', '2026-03-05', { note: 'depois', type: 'consulta' }));
+
+    // The update overwrites the row: one event, with the new fields.
+    const listed = await repo.listEvents('2026-03-01', '2026-03-31');
+    expect(listed).toHaveLength(1);
+    expect(listed[0]).toEqual(makeEvent('e1', '2026-03-05', { note: 'depois', type: 'consulta' }));
+  });
+
+  it('changing an event date moves it across listEvents and daysInRange windows', async () => {
+    await repo.putEvent(makeEvent('e1', '2026-03-05'));
+    // It is in March, not April.
+    expect((await repo.listEvents('2026-03-01', '2026-03-31')).map((e) => e.id)).toEqual(['e1']);
+    expect(await repo.listEvents('2026-04-01', '2026-04-30')).toEqual([]);
+
+    // Re-put the same id on an April date.
+    await repo.putEvent(makeEvent('e1', '2026-04-10'));
+
+    // Still a single row, now found in April and gone from March.
+    expect(await repo.listEvents('2026-03-01', '2026-03-31')).toEqual([]);
+    expect((await repo.listEvents('2026-04-01', '2026-04-30')).map((e) => e.id)).toEqual(['e1']);
+  });
+
   it('deleteEvent removes only the targeted event', async () => {
     await repo.putEvent(makeEvent('keep', '2026-05-01'));
     await repo.putEvent(makeEvent('drop', '2026-05-02'));
@@ -144,6 +176,15 @@ describe('Symptom and Medication lists', () => {
     const med: Medication = { id: 'infliximabe', name: 'Infliximabe', intervalDays: 56 };
     await repo.putMedication(med);
     expect(await repo.listMedications()).toEqual([med]);
+  });
+
+  it('deleteMedication removes only the targeted medication', async () => {
+    await repo.putMedication({ id: 'infliximabe', name: 'Infliximabe', intervalDays: 56 });
+    await repo.putMedication({ id: 'azatioprina', name: 'Azatioprina', intervalDays: 1 });
+
+    await repo.deleteMedication('azatioprina');
+
+    expect((await repo.listMedications()).map((m) => m.id)).toEqual(['infliximabe']);
   });
 });
 

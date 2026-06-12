@@ -76,12 +76,14 @@ export interface Repository {
   putDay(log: DayLog): Promise<void>;
   daysInRange(from: string, to: string): Promise<DayLog[]>;
   listEvents(from: string, to: string): Promise<HealthEvent[]>;
+  getEvent(id: string): Promise<HealthEvent | null>;
   putEvent(e: HealthEvent): Promise<void>;
   deleteEvent(id: string): Promise<void>;
   listSymptoms(): Promise<Symptom[]>;
   putSymptom(s: Symptom): Promise<void>;
   listMedications(): Promise<Medication[]>;
   putMedication(m: Medication): Promise<void>;
+  deleteMedication(id: string): Promise<void>;
   getReminders(): Promise<ReminderSettings>;
   putReminders(r: ReminderSettings): Promise<void>;
   getProfile(): Promise<Profile>;

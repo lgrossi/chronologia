@@ -48,6 +48,15 @@ export function useEventsInRange(from: string, to: string): HealthEvent[] {
   );
 }
 
+/**
+ * Live HealthEvent by id, or null when absent. `undefined` while the first
+ * query resolves and whenever `id` is omitted, so callers can branch on the
+ * loading/no-id window separately from the not-found case.
+ */
+export function useEvent(id?: string): HealthEvent | null | undefined {
+  return useLiveQuery(async () => (id ? ((await db.events.get(id)) ?? null) : undefined), [id]);
+}
+
 /** Live list of all symptoms (presets + personalizados). */
 export function useSymptoms(): Symptom[] {
   return useLiveQuery(() => db.symptoms.toArray(), []) ?? [];

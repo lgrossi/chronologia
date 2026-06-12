@@ -4,7 +4,7 @@
  * store. Each setting row opens a BottomSheet editor; Backup is the v1
  * durability story (export → JSON download, import → JSON file → repo.importAll).
  */
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   useEventsInRange,
   useMedications,
@@ -49,6 +49,7 @@ export function Perfil() {
   const close = () => setSheet(null);
 
   const withAttachments = events.filter((e) => (e.attachments?.length ?? 0) > 0);
+  const attachmentCount = withAttachments.reduce((n, e) => n + (e.attachments?.length ?? 0), 0);
   const customCount = symptoms.filter((s) => !s.isPreset && !s.archived).length;
   const presetCount = symptoms.filter((s) => s.isPreset && !s.archived).length;
 
@@ -77,7 +78,7 @@ export function Perfil() {
       key: 'docs',
       icon: 'flask',
       title: 'Exames e documentos',
-      sub: `${withAttachments.length} ${withAttachments.length === 1 ? 'anexo' : 'anexos'}`,
+      sub: `${attachmentCount} ${attachmentCount === 1 ? 'anexo' : 'anexos'}`,
     },
     { key: 'account', icon: 'user', title: 'Conta', sub: profile.email ?? 'sem e-mail' },
     { key: 'backup', icon: 'spark', title: 'Backup', sub: 'exportar ou importar seus dados' },
@@ -157,7 +158,7 @@ export function Perfil() {
       </div>
 
       <BottomSheet open={sheet === 'meds'} onClose={close}>
-        <MedsEditor meds={meds} onClose={close} />
+        <MedsEditor meds={meds} />
       </BottomSheet>
       <BottomSheet open={sheet === 'reminders'} onClose={close}>
         <RemindersEditor reminders={reminders} onClose={close} />
@@ -228,6 +229,42 @@ function FieldLabel({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Inline text button matching the existing "arquivar"/"remover" affordances.
+ * Destructive actions stay within the palette: severity inks are reserved for
+ * symptom intensity, the single accent for affirmative actions — so danger is
+ * carried by the word ("remover") and a muted tone, never colour (mirrors
+ * AddEvento's "excluir evento" treatment).
+ */
+function TextAction({
+  children,
+  onClick,
+  danger,
+}: {
+  children: ReactNode;
+  onClick: () => void;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        fontSize: 13,
+        fontWeight: 600,
+        color: danger ? COLORS.soft : COLORS.accent,
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        padding: '6px 4px',
+        minHeight: 36,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 const inputStyle = {
   width: '100%',
   background: COLORS.card,
@@ -243,19 +280,55 @@ const inputStyle = {
 
 /* ----------------------------- medications ------------------------------ */
 
-function MedsEditor({ meds, onClose }: { meds: Medication[]; onClose: () => void }) {
-  const [drafts, setDrafts] = useState<Record<string, { name: string; weeks: string }>>(() =>
-    Object.fromEntries(
-      meds.map((m) => [m.id, { name: m.name, weeks: String(Math.round(m.intervalDays / 7)) }]),
-    ),
-  );
+/** Sensible default cadence for a freshly added medication. */
+const DEFAULT_INTERVAL_DAYS = 8 * 7;
 
-  const save = async (m: Medication) => {
-    const d = drafts[m.id];
-    if (!d) return;
+/**
+ * Full CRUD over medications with autosave: every field commits on blur (and,
+ * for the interval number, normalizes to a sane >=1 weeks). There is no
+ * per-medication "salvar" — the live `useMedications` hook re-renders rows as
+ * writes land, so local draft state only exists to keep typing smooth between
+ * blurs. Adding a medication persists immediately and focuses the new name
+ * input so it's ready to edit.
+ */
+function MedsEditor({ meds }: { meds: Medication[] }) {
+  const [drafts, setDrafts] = useState<Record<string, { name: string; weeks: string }>>({});
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+
+  /** Draft for a row, falling back to the persisted medication. */
+  const draftOf = (m: Medication) =>
+    drafts[m.id] ?? { name: m.name, weeks: String(Math.round(m.intervalDays / 7)) };
+
+  const commitName = async (m: Medication) => {
+    const d = draftOf(m);
+    const name = d.name.trim();
+    if (name && name !== m.name) await repo.putMedication({ ...m, name });
+  };
+
+  const commitWeeks = async (m: Medication) => {
+    const d = draftOf(m);
     const weeks = Math.max(1, Math.round(Number(d.weeks) || 1));
-    await repo.putMedication({ ...m, name: d.name.trim() || m.name, intervalDays: weeks * 7 });
-    onClose();
+    const intervalDays = weeks * 7;
+    setDrafts((p) => ({ ...p, [m.id]: { ...draftOf(m), weeks: String(weeks) } }));
+    if (intervalDays !== m.intervalDays) await repo.putMedication({ ...m, intervalDays });
+  };
+
+  const add = async () => {
+    const id = crypto.randomUUID();
+    await repo.putMedication({ id, name: '', intervalDays: DEFAULT_INTERVAL_DAYS });
+    setDrafts((p) => ({ ...p, [id]: { name: '', weeks: String(DEFAULT_INTERVAL_DAYS / 7) } }));
+    setFocusId(id);
+  };
+
+  const remove = async (m: Medication) => {
+    setConfirmId(null);
+    setDrafts((p) => {
+      const next = { ...p };
+      delete next[m.id];
+      return next;
+    });
+    await repo.deleteMedication(m.id);
   };
 
   return (
@@ -263,20 +336,34 @@ function MedsEditor({ meds, onClose }: { meds: Medication[]; onClose: () => void
       <SheetTitle>Meus medicamentos</SheetTitle>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {meds.length === 0 && (
-          <div style={{ fontSize: 14, color: COLORS.soft }}>Nenhum medicamento cadastrado.</div>
+          <div style={{ fontSize: 14, color: COLORS.soft }}>Nenhum medicamento ainda.</div>
         )}
         {meds.map((m) => {
-          const d = drafts[m.id] ?? { name: m.name, weeks: String(Math.round(m.intervalDays / 7)) };
+          const d = draftOf(m);
           return (
-            <div key={m.id} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div
+              key={m.id}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 12,
+                background: COLORS.card,
+                border: `1.5px solid ${COLORS.line}`,
+                borderRadius: 16,
+                padding: 14,
+              }}
+            >
               <div>
                 <FieldLabel>Nome</FieldLabel>
                 <input
                   style={inputStyle}
+                  placeholder="ex.: Infliximabe"
+                  autoFocus={focusId === m.id}
                   value={d.name}
                   onChange={(e) =>
-                    setDrafts((p) => ({ ...p, [m.id]: { ...d, name: e.target.value } }))
+                    setDrafts((p) => ({ ...p, [m.id]: { ...draftOf(m), name: e.target.value } }))
                   }
+                  onBlur={() => commitName(m)}
                 />
               </div>
               <div>
@@ -288,18 +375,54 @@ function MedsEditor({ meds, onClose }: { meds: Medication[]; onClose: () => void
                   style={inputStyle}
                   value={d.weeks}
                   onChange={(e) =>
-                    setDrafts((p) => ({ ...p, [m.id]: { ...d, weeks: e.target.value } }))
+                    setDrafts((p) => ({ ...p, [m.id]: { ...draftOf(m), weeks: e.target.value } }))
                   }
+                  onBlur={() => commitWeeks(m)}
                 />
               </div>
-              <Btn primary onClick={() => save(m)}>
-                <Icon name="check" size={18} color={COLORS.onAccent} />
-                guardar
-              </Btn>
+              {confirmId === m.id ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ flex: 1, fontSize: 13.5, color: COLORS.soft }}>
+                    Remover este medicamento?
+                  </span>
+                  <TextAction onClick={() => setConfirmId(null)}>cancelar</TextAction>
+                  <TextAction danger onClick={() => remove(m)}>
+                    remover
+                  </TextAction>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <TextAction onClick={() => setConfirmId(m.id)}>remover</TextAction>
+                </div>
+              )}
             </div>
           );
         })}
       </div>
+
+      <button
+        type="button"
+        onClick={add}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          width: '100%',
+          marginTop: 16,
+          minHeight: 44,
+          background: 'none',
+          border: `1.5px dashed ${COLORS.line}`,
+          borderRadius: 14,
+          color: COLORS.accent,
+          fontSize: 15,
+          fontWeight: 600,
+          cursor: 'pointer',
+        }}
+      >
+        <Icon name="plus" size={18} color={COLORS.accent} />
+        adicionar medicamento
+      </button>
     </div>
   );
 }
@@ -473,58 +596,153 @@ function SymptomsEditor({ symptoms }: { symptoms: Symptom[] }) {
 
 /* --------------------------- exams & documents -------------------------- */
 
+/** One attachment, located by its owning event and index within it. */
+interface AttachmentRef {
+  event: HealthEvent;
+  index: number;
+  blob: Blob;
+}
+
+/**
+ * Lists every attachment across history (flattened so each row is one file),
+ * lets the user open it in a viewer, and remove just that file. Removing the
+ * last attachment of an event that has no note deletes the now-empty event;
+ * otherwise it rewrites the event with the remaining attachments — the least
+ * surprising outcome (a bare attachment shell isn't worth keeping, but notes
+ * are the user's words and must survive).
+ */
 function DocsViewer({ events }: { events: HealthEvent[] }) {
-  const remove = async (id: string) => {
-    await repo.deleteEvent(id);
+  const [viewing, setViewing] = useState<AttachmentRef | null>(null);
+  const [confirmKey, setConfirmKey] = useState<string | null>(null);
+
+  const refs: AttachmentRef[] = events.flatMap((event) =>
+    (event.attachments ?? []).map((blob, index) => ({ event, index, blob })),
+  );
+
+  const remove = async (ref: AttachmentRef) => {
+    setConfirmKey(null);
+    const remaining = (ref.event.attachments ?? []).filter((_, i) => i !== ref.index);
+    if (remaining.length === 0 && !ref.event.note?.trim()) {
+      await repo.deleteEvent(ref.event.id);
+      return;
+    }
+    await repo.putEvent({ ...ref.event, attachments: remaining });
   };
 
   return (
     <div>
       <SheetTitle>Exames e documentos</SheetTitle>
-      {events.length === 0 ? (
+      {refs.length === 0 ? (
         <div style={{ fontSize: 14, color: COLORS.soft }}>Nenhum anexo ainda.</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {events.map((e) => (
-            <div
-              key={e.id}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                background: COLORS.card,
-                border: `1.5px solid ${COLORS.line}`,
-                borderRadius: 14,
-                padding: '12px 14px',
-                minHeight: 44,
-              }}
-            >
-              <IconChip name="flask" />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 15, fontWeight: 600, color: COLORS.ink }}>
-                  {EVENT_LABELS[e.type]}
-                </div>
-                <div style={{ fontSize: 13, color: COLORS.soft }}>{formatLongPt(e.date)}</div>
-              </div>
-              <button
-                type="button"
-                onClick={() => remove(e.id)}
+          {refs.map((ref) => {
+            const key = `${ref.event.id}:${ref.index}`;
+            const isImage = ref.blob.type.startsWith('image/');
+            return (
+              <div
+                key={key}
                 style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: COLORS.accent,
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '6px 4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  background: COLORS.card,
+                  border: `1.5px solid ${COLORS.line}`,
+                  borderRadius: 14,
+                  padding: '12px 14px',
+                  minHeight: 44,
                 }}
               >
-                remover
-              </button>
-            </div>
-          ))}
+                <IconChip name="flask" />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: COLORS.ink }}>
+                    {EVENT_LABELS[ref.event.type]}
+                  </div>
+                  <div style={{ fontSize: 13, color: COLORS.soft }}>
+                    {formatLongPt(ref.event.date)}
+                  </div>
+                </div>
+                {confirmKey === key ? (
+                  <>
+                    <TextAction onClick={() => setConfirmKey(null)}>cancelar</TextAction>
+                    <TextAction danger onClick={() => remove(ref)}>
+                      remover
+                    </TextAction>
+                  </>
+                ) : (
+                  <>
+                    <TextAction onClick={() => setViewing(ref)}>
+                      {isImage ? 'ver' : 'abrir'}
+                    </TextAction>
+                    <TextAction onClick={() => setConfirmKey(key)}>remover</TextAction>
+                  </>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
+
+      <BottomSheet open={viewing !== null} onClose={() => setViewing(null)}>
+        {viewing && <AttachmentView attachment={viewing} onClose={() => setViewing(null)} />}
+      </BottomSheet>
+    </div>
+  );
+}
+
+/**
+ * Renders one attachment from its in-memory Blob. Images show inline via an
+ * object URL; anything else gets an open/download link. The object URL is
+ * created per mount and revoked on unmount so blobs don't leak.
+ */
+function AttachmentView({ attachment, onClose }: { attachment: AttachmentRef; onClose: () => void }) {
+  const { event, blob } = attachment;
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const objectUrl = URL.createObjectURL(blob);
+    setUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [blob]);
+
+  const isImage = blob.type.startsWith('image/');
+
+  return (
+    <div>
+      <SheetTitle>
+        {EVENT_LABELS[event.type]} · {formatLongPt(event.date)}
+      </SheetTitle>
+      {url &&
+        (isImage ? (
+          <img
+            src={url}
+            alt={`${EVENT_LABELS[event.type]} de ${formatLongPt(event.date)}`}
+            style={{
+              display: 'block',
+              width: '100%',
+              maxHeight: '56vh',
+              objectFit: 'contain',
+              borderRadius: 14,
+              border: `1.5px solid ${COLORS.line}`,
+            }}
+          />
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <p style={{ fontSize: 14, color: COLORS.soft, lineHeight: 1.5 }}>
+              Este anexo não é uma imagem. Você pode abri-lo em uma nova aba.
+            </p>
+            <Btn primary onClick={() => window.open(url, '_blank', 'noopener')}>
+              <Icon name="flask" size={18} color={COLORS.onAccent} />
+              abrir anexo
+            </Btn>
+          </div>
+        ))}
+      <div style={{ marginTop: 16 }}>
+        <Btn onClick={onClose}>
+          <Icon name="chevL" size={18} color={COLORS.ink} />
+          voltar
+        </Btn>
+      </div>
     </div>
   );
 }

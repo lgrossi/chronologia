@@ -1,15 +1,17 @@
 /**
- * AddEvento — "Adicionar evento" overlay (SCREENS.md §3, proto-evento.jsx).
+ * AddEvento — "Novo evento" / "Editar evento" overlay (SCREENS.md §3, proto-evento.jsx).
  *
- * Opened by the center FAB. Logs infusions, exams, appointments, etc. The
- * infusão type reveals its own details block (medication + next-dose reminder).
- * The attachment row carries the dual "foto do exame ou uma nota" — a file
- * picker plus an optional free-text note, both folded into the saved event.
+ * CREATE (no eventId): the center FAB opens a blank form on `dateKey`; save mints
+ * a new id and reports onSaved(type,'created'). EDIT (eventId set): the event is
+ * loaded via repo.getEvent and EVERY field is prefilled — type, date, medication,
+ * reminder toggle, note, and any existing attachment (shown, replaceable, removable).
+ * Save writes back under the SAME id (onSaved(type,'updated')); the destructive
+ * "excluir evento" action removes it (onSaved(type,'deleted')).
  *
- * Overlay-only: navigation is by props. onSaved(type) lets the parent close
- * and fire the confirmation toast.
+ * Overlay-only: navigation is by props. onSaved(type, mode) lets the parent close
+ * and fire the matching confirmation toast.
  */
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { EventType } from '@/lib/types';
 import { COLORS } from '@/theme/tokens';
 import { Icon, type IconName } from '@/components/Icon';
@@ -19,12 +21,14 @@ import { useMedications } from '@/data/hooks';
 import { repo } from '@/data/repo';
 
 export interface AddEventoProps {
-  /** Day-key (yyyy-mm-dd) the FAB opened on; the default "Quando". */
+  /** Day-key (yyyy-mm-dd) the overlay opened on; the default "Quando". */
   dateKey: string;
+  /** When present, edit this existing event instead of creating a new one. */
+  eventId?: string;
   /** Dismiss without saving. */
   onClose: () => void;
-  /** Saved successfully; parent closes the overlay and shows the toast. */
-  onSaved: (type: EventType) => void;
+  /** Saved/removed; parent closes the overlay and shows the matching toast. */
+  onSaved: (type: EventType, mode: 'created' | 'updated' | 'deleted') => void;
 }
 
 // Chip order + icon mirror the prototype. Label is final pt-BR copy; value is
@@ -57,32 +61,91 @@ const sectionTitle: CSSProperties = {
   marginBottom: 10,
 };
 
-export function AddEvento({ dateKey, onClose, onSaved }: AddEventoProps) {
+export function AddEvento({ dateKey, eventId, onClose, onSaved }: AddEventoProps) {
   const medications = useMedications();
   const med = medications[0];
+
+  const isEdit = Boolean(eventId);
 
   const [type, setType] = useState<EventType>('infusao');
   const [chosenKey, setChosenKey] = useState(dateKey);
   const [remind, setRemind] = useState(true);
+  // A freshly picked image (CREATE, or replacing in EDIT).
   const [file, setFile] = useState<File | null>(null);
+  // An attachment already stored on the event being edited.
+  const [existingAttachment, setExistingAttachment] = useState<Blob | null>(null);
   const [note, setNote] = useState('');
+  // EDIT mode is not ready to save until the event finishes loading.
+  const [loaded, setLoaded] = useState(!eventId);
+
+  const dateInputRef = useRef<HTMLInputElement>(null);
+
+  // EDIT: load the event once and prefill every field.
+  useEffect(() => {
+    if (!eventId) return;
+    let active = true;
+    void repo.getEvent(eventId).then((event) => {
+      if (!active || !event) return;
+      setType(event.type);
+      setChosenKey(event.date);
+      setRemind(event.remindNextDoseDays != null);
+      setExistingAttachment(event.attachments?.[0] ?? null);
+      setNote(event.note ?? '');
+      setLoaded(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [eventId]);
 
   const isInfusao = type === 'infusao';
   // Medication cycle in whole weeks (Infliximabe = 56 days → 8 semanas).
   const weeks = med ? Math.round(med.intervalDays / 7) : null;
 
+  // What the attachment row shows: a new pick wins, else the stored one.
+  const attachmentLabel = file
+    ? file.name
+    : existingAttachment
+      ? 'anexo atual'
+      : null;
+
+  function openDatePicker() {
+    const el = dateInputRef.current;
+    if (!el) return;
+    try {
+      el.showPicker?.();
+    } catch {
+      // showPicker can throw (not user-activated / unsupported); the native
+      // input remains tappable as the fallback, so swallow and move on.
+    }
+  }
+
+  function clearAttachment() {
+    setFile(null);
+    setExistingAttachment(null);
+  }
+
   async function save() {
+    if (!loaded) return;
     const trimmed = note.trim();
+    // Keep an existing attachment unless replaced or cleared.
+    const attachment = file ?? existingAttachment;
     await repo.putEvent({
-      id: crypto.randomUUID(),
+      id: eventId ?? crypto.randomUUID(),
       date: chosenKey,
       type,
       medicationId: isInfusao ? med?.id : undefined,
       remindNextDoseDays: isInfusao && remind ? med?.intervalDays : undefined,
-      attachments: file ? [file] : undefined,
+      attachments: attachment ? [attachment] : undefined,
       note: trimmed ? trimmed : undefined,
     });
-    onSaved(type);
+    onSaved(type, isEdit ? 'updated' : 'created');
+  }
+
+  async function remove() {
+    if (!eventId) return;
+    await repo.deleteEvent(eventId);
+    onSaved(type, 'deleted');
   }
 
   return (
@@ -130,7 +193,7 @@ export function AddEvento({ dateKey, onClose, onSaved }: AddEventoProps) {
             cancelar
           </button>
           <div style={{ fontFamily: 'var(--font-display, inherit)', fontSize: 18, fontWeight: 700 }}>
-            Novo evento
+            {isEdit ? 'Editar evento' : 'Novo evento'}
           </div>
           <div style={{ width: 56 }} />
         </div>
@@ -167,39 +230,47 @@ export function AddEvento({ dateKey, onClose, onSaved }: AddEventoProps) {
           })}
         </div>
 
-        {/* Quando */}
+        {/* Quando — a real native date input is the interactive control. The
+            whole row opens the picker on a single tap (showPicker), and the
+            input sits in normal flow so it is itself the click target on
+            Android Chrome — nothing absolutely-positioned covers it. */}
         <div style={sectionTitle}>Quando</div>
-        <label
+        <div
+          onClick={openDatePicker}
           style={{
             ...rowCard,
             marginBottom: 18,
             boxShadow: SHADOW_CARD,
             cursor: 'pointer',
-            position: 'relative',
+            gap: 12,
           }}
         >
           <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 16 }}>
             <Icon name="cal" size={18} color={COLORS.accent} />
             {formatLongPt(chosenKey)}
           </span>
-          <span style={{ fontSize: 14, color: COLORS.soft }}>alterar ›</span>
-          {/* Transparent native picker over the whole row keeps the calm look
-              while still letting the user reassign the day. */}
           <input
+            ref={dateInputRef}
             type="date"
             value={chosenKey}
             onChange={(e) => e.target.value && setChosenKey(e.target.value)}
+            onFocus={openDatePicker}
             style={{
-              position: 'absolute',
-              inset: 0,
-              width: '100%',
-              height: '100%',
-              opacity: 0,
+              background: COLORS.card,
+              border: `1.5px solid ${COLORS.line}`,
+              borderRadius: 12,
+              padding: '8px 10px',
+              minHeight: 44,
+              fontFamily: 'inherit',
+              fontSize: 14,
+              color: COLORS.ink,
+              colorScheme: 'light',
+              outline: 'none',
               cursor: 'pointer',
             }}
-            aria-label="alterar a data do evento"
+            aria-label="data do evento"
           />
-        </label>
+        </div>
 
         {/* Type-specific: infusão details */}
         {isInfusao && (
@@ -259,15 +330,15 @@ export function AddEvento({ dateKey, onClose, onSaved }: AddEventoProps) {
             padding: '14px 16px',
             borderRadius: 16,
             border: `1.5px dashed ${COLORS.line}`,
-            color: file ? COLORS.ink : COLORS.soft,
-            marginBottom: 14,
+            color: attachmentLabel ? COLORS.ink : COLORS.soft,
+            marginBottom: attachmentLabel ? 8 : 14,
             cursor: 'pointer',
             minHeight: 44,
           }}
         >
-          <Icon name="pencil" size={17} color={file ? COLORS.accent : COLORS.soft} />
+          <Icon name="pencil" size={17} color={attachmentLabel ? COLORS.accent : COLORS.soft} />
           <span style={{ fontSize: 14.5 }}>
-            {file ? file.name : 'anexar foto do exame ou uma nota'}
+            {attachmentLabel ?? 'anexar foto do exame ou uma nota'}
           </span>
           <input
             type="file"
@@ -276,6 +347,27 @@ export function AddEvento({ dateKey, onClose, onSaved }: AddEventoProps) {
             style={{ display: 'none' }}
           />
         </label>
+
+        {/* Replace/remove the chosen or stored attachment. */}
+        {attachmentLabel && (
+          <button
+            type="button"
+            onClick={clearAttachment}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: 14,
+              color: COLORS.soft,
+              fontWeight: 600,
+              minHeight: 44,
+              padding: '0 4px',
+              marginBottom: 8,
+            }}
+          >
+            remover anexo
+          </button>
+        )}
 
         {/* Free-text note (the "ou uma nota" half) */}
         <textarea
@@ -300,10 +392,29 @@ export function AddEvento({ dateKey, onClose, onSaved }: AddEventoProps) {
         />
 
         {/* Save */}
-        <Btn primary onClick={save}>
-          salvar evento
+        <Btn primary onClick={save} disabled={!loaded}>
+          {isEdit ? 'salvar alterações' : 'salvar evento'}
           <Icon name="check" size={18} color={COLORS.onAccent} strokeWidth={2.6} />
         </Btn>
+
+        {/* Destructive: only in EDIT mode. Stays within the palette — severity
+            inks are reserved for symptom intensity, the single accent for
+            primary actions — so the danger is carried by the label and a muted,
+            borderless secondary surface, not by colour. */}
+        {isEdit && (
+          <Btn
+            onClick={remove}
+            style={{
+              marginTop: 12,
+              color: COLORS.soft,
+              border: 'none',
+              boxShadow: 'none',
+              fontWeight: 600,
+            }}
+          >
+            excluir evento
+          </Btn>
+        )}
       </div>
     </div>
   );
