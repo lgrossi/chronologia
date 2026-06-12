@@ -55,7 +55,7 @@ export function Perfil() {
 
   const primaryMed = meds[0];
   const medSub = primaryMed
-    ? `${primaryMed.name} · a cada ${weeksLabel(primaryMed.intervalDays)}`
+    ? `${meds.length > 1 ? `${meds.length} medicamentos` : primaryMed.name} · ${freqLabel(primaryMed.intervalDays)}`
     : 'nenhum medicamento';
 
   const initial = (profile.name.trim()[0] ?? 'A').toUpperCase();
@@ -181,9 +181,26 @@ export function Perfil() {
 
 /* ----------------------------- shared bits ------------------------------ */
 
-function weeksLabel(intervalDays: number): string {
-  const weeks = Math.round(intervalDays / 7);
-  return weeks === 1 ? '1 semana' : `${weeks} semanas`;
+/** Natural-language frequency for any interval: daily, every-N-days, or weeks. */
+function freqLabel(intervalDays: number): string {
+  if (intervalDays <= 1) return 'todo dia';
+  if (intervalDays < 7) return `a cada ${intervalDays} dias`;
+  if (intervalDays === 7) return 'toda semana';
+  if (intervalDays % 7 === 0) return `a cada ${intervalDays / 7} semanas`;
+  return `a cada ${intervalDays} dias`;
+}
+
+/** Split an interval into the editor's {unit, value} for display. */
+function freqParts(intervalDays: number): { unit: 'dia' | 'semana'; value: string } {
+  return intervalDays % 7 === 0 && intervalDays >= 7
+    ? { unit: 'semana', value: String(intervalDays / 7) }
+    : { unit: 'dia', value: String(Math.max(1, intervalDays)) };
+}
+
+/** {unit, value} → canonical intervalDays (min 1). */
+function freqToDays(unit: 'dia' | 'semana', value: string): number {
+  const n = Math.max(1, Math.round(Number(value) || 1));
+  return unit === 'semana' ? n * 7 : n;
 }
 
 function IconChip({ name }: { name: IconName }) {
@@ -280,9 +297,6 @@ const inputStyle = {
 
 /* ----------------------------- medications ------------------------------ */
 
-/** Sensible default cadence for a freshly added medication. */
-const DEFAULT_INTERVAL_DAYS = 8 * 7;
-
 /**
  * Full CRUD over medications with autosave: every field commits on blur (and,
  * for the interval number, normalizes to a sane >=1 weeks). There is no
@@ -292,13 +306,14 @@ const DEFAULT_INTERVAL_DAYS = 8 * 7;
  * input so it's ready to edit.
  */
 function MedsEditor({ meds }: { meds: Medication[] }) {
-  const [drafts, setDrafts] = useState<Record<string, { name: string; weeks: string }>>({});
+  const [drafts, setDrafts] = useState<
+    Record<string, { name: string; unit: 'dia' | 'semana'; value: string }>
+  >({});
   const [focusId, setFocusId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
   /** Draft for a row, falling back to the persisted medication. */
-  const draftOf = (m: Medication) =>
-    drafts[m.id] ?? { name: m.name, weeks: String(Math.round(m.intervalDays / 7)) };
+  const draftOf = (m: Medication) => drafts[m.id] ?? { name: m.name, ...freqParts(m.intervalDays) };
 
   const commitName = async (m: Medication) => {
     const d = draftOf(m);
@@ -306,18 +321,20 @@ function MedsEditor({ meds }: { meds: Medication[] }) {
     if (name && name !== m.name) await repo.putMedication({ ...m, name });
   };
 
-  const commitWeeks = async (m: Medication) => {
-    const d = draftOf(m);
-    const weeks = Math.max(1, Math.round(Number(d.weeks) || 1));
-    const intervalDays = weeks * 7;
-    setDrafts((p) => ({ ...p, [m.id]: { ...draftOf(m), weeks: String(weeks) } }));
+  /** Persist the frequency (number or unit change) — autosave, no save button. */
+  const commitFreq = async (m: Medication, next: { unit: 'dia' | 'semana'; value: string }) => {
+    const intervalDays = freqToDays(next.unit, next.value);
+    setDrafts((p) => ({
+      ...p,
+      [m.id]: { name: draftOf(m).name, unit: next.unit, value: String(Math.max(1, Math.round(Number(next.value) || 1))) },
+    }));
     if (intervalDays !== m.intervalDays) await repo.putMedication({ ...m, intervalDays });
   };
 
   const add = async () => {
     const id = crypto.randomUUID();
-    await repo.putMedication({ id, name: '', intervalDays: DEFAULT_INTERVAL_DAYS });
-    setDrafts((p) => ({ ...p, [id]: { name: '', weeks: String(DEFAULT_INTERVAL_DAYS / 7) } }));
+    await repo.putMedication({ id, name: '', intervalDays: 1 });
+    setDrafts((p) => ({ ...p, [id]: { name: '', unit: 'dia', value: '1' } }));
     setFocusId(id);
   };
 
@@ -367,18 +384,58 @@ function MedsEditor({ meds }: { meds: Medication[] }) {
                 />
               </div>
               <div>
-                <FieldLabel>Intervalo (semanas)</FieldLabel>
-                <input
-                  type="number"
-                  min={1}
-                  inputMode="numeric"
-                  style={inputStyle}
-                  value={d.weeks}
-                  onChange={(e) =>
-                    setDrafts((p) => ({ ...p, [m.id]: { ...draftOf(m), weeks: e.target.value } }))
-                  }
-                  onBlur={() => commitWeeks(m)}
-                />
+                <FieldLabel>Frequência</FieldLabel>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 14, color: COLORS.soft }}>a cada</span>
+                  <input
+                    type="number"
+                    min={1}
+                    inputMode="numeric"
+                    style={{ ...inputStyle, width: 72 }}
+                    value={d.value}
+                    onChange={(e) =>
+                      setDrafts((p) => ({ ...p, [m.id]: { ...draftOf(m), value: e.target.value } }))
+                    }
+                    onBlur={() => commitFreq(m, { unit: d.unit, value: d.value })}
+                  />
+                  <div
+                    style={{
+                      display: 'inline-flex',
+                      background: COLORS.paper,
+                      border: `1.5px solid ${COLORS.line}`,
+                      borderRadius: 12,
+                      padding: 3,
+                    }}
+                  >
+                    {(['dia', 'semana'] as const).map((u) => {
+                      const on = d.unit === u;
+                      return (
+                        <button
+                          key={u}
+                          type="button"
+                          onClick={() => commitFreq(m, { unit: u, value: d.value })}
+                          style={{
+                            minHeight: 40,
+                            padding: '0 14px',
+                            borderRadius: 10,
+                            border: 'none',
+                            cursor: 'pointer',
+                            background: on ? COLORS.accent : 'transparent',
+                            color: on ? COLORS.onAccent : COLORS.soft,
+                            fontFamily: 'Hanken Grotesk, sans-serif',
+                            fontSize: 13.5,
+                            fontWeight: on ? 700 : 600,
+                          }}
+                        >
+                          {u === 'dia' ? 'dia(s)' : 'semana(s)'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div style={{ marginTop: 6, fontSize: 12.5, color: COLORS.faint }}>
+                  {freqLabel(freqToDays(d.unit, d.value))}
+                </div>
               </div>
               {confirmId === m.id ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

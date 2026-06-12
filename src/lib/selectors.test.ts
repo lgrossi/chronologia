@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   cycleStatus,
+  infusionMedication,
   weekStrip,
   monthRollup,
   topSymptoms,
@@ -32,6 +33,22 @@ const day = (
 });
 
 const sym = (name: string, severity: Severity = 'leve'): SymptomEntry => ({ name, severity });
+
+describe('infusionMedication', () => {
+  const infliximabe: Medication = { id: 'inf', name: 'Infliximabe', intervalDays: 56 };
+  const dailyMed: Medication = { id: 'd1', name: 'Azatioprina', intervalDays: 1 };
+  const lastInfusion: HealthEvent = { id: 'e9', date: '2026-06-01', type: 'infusao', medicationId: 'inf' };
+
+  it('resolves the med the infusion event references, even when a daily med is first in the list', () => {
+    expect(infusionMedication([dailyMed, infliximabe], lastInfusion)).toBe(infliximabe);
+  });
+  it('returns null when there is no infusion', () => {
+    expect(infusionMedication([dailyMed, infliximabe], null)).toBeNull();
+  });
+  it('returns null when the referenced med no longer exists', () => {
+    expect(infusionMedication([dailyMed], lastInfusion)).toBeNull();
+  });
+});
 
 describe('cycleStatus', () => {
   it('computes dayN, daysLeft and pct mid-cycle (20 days into a 56-day cycle)', () => {

@@ -9,6 +9,20 @@
 import type { DayLog, HealthEvent, Medication, Mood, Severity } from './types';
 import { daysBetween, weekKeysMonday, weekdayLetterPt } from './date';
 
+/**
+ * The medication that drives the infusion cycle: the one referenced by the
+ * anchoring infusion EVENT, never just `meds[0]`. Keying off the event keeps the
+ * cycle stable when other medications (e.g. daily maintenance meds) are added to
+ * the list. Returns null when there is no infusion or its medication is gone.
+ */
+export function infusionMedication(
+  meds: Medication[],
+  lastInfusion: HealthEvent | null,
+): Medication | null {
+  if (!lastInfusion?.medicationId) return null;
+  return meds.find((m) => m.id === lastInfusion.medicationId) ?? null;
+}
+
 export interface CycleStatus {
   dayN: number;
   total: number;

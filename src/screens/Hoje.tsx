@@ -17,7 +17,7 @@ import {
   localDayKey,
   weekKeysMonday,
 } from '@/lib/date';
-import { cycleStatus, weekStrip } from '@/lib/selectors';
+import { cycleStatus, infusionMedication, weekStrip } from '@/lib/selectors';
 import type { DayLog, Mood } from '@/lib/types';
 
 /** Display word for a mood (the recap bolds it as the day's character). */
@@ -35,7 +35,15 @@ function recapSubline(log: DayLog): string {
   return log.overallSeverity ? `${log.waveCount}× ${log.overallSeverity}` : 'dia tranquilo';
 }
 
-export function Hoje({ onRegistrar, onOpenLinha }: { onRegistrar: () => void; onOpenLinha: () => void }) {
+export function Hoje({
+  onRegistrar,
+  onOpenLinha,
+  onOpenDay,
+}: {
+  onRegistrar: () => void;
+  onOpenLinha: () => void;
+  onOpenDay: (dateKey: string) => void;
+}) {
   const todayKey = localDayKey();
   const profile = useProfile();
   const reminders = useReminders();
@@ -48,12 +56,13 @@ export function Hoje({ onRegistrar, onOpenLinha }: { onRegistrar: () => void; on
   const weekDays = useDaysInRange(weekKeys[0], weekKeys[6]);
   const cells = weekStrip(weekDays, todayKey);
 
-  // Infusion cycle: most recent `infusao` in the past year + the primary med.
+  // Infusion cycle: most recent `infusao` in the past year + the med that
+  // infusion references (not meds[0], which may be a daily maintenance med).
   const events = useEventsInRange(addDays(todayKey, -365), todayKey);
   const meds = useMedications();
-  const med = meds[0] ?? null;
   const lastInfusion =
     [...events].reverse().find((e) => e.type === 'infusao') ?? null;
+  const med = infusionMedication(meds, lastInfusion);
   const cycle = cycleStatus(todayKey, lastInfusion, med);
   const hasCycle = lastInfusion !== null && cycle.total > 0;
 
@@ -229,7 +238,13 @@ export function Hoje({ onRegistrar, onOpenLinha }: { onRegistrar: () => void; on
         </div>
         <div className="flex gap-[7px]">
           {cells.map((cell) => (
-            <div key={cell.key} className="flex flex-1 flex-col items-center gap-1.5">
+            <button
+              key={cell.key}
+              type="button"
+              onClick={() => onOpenDay(cell.key)}
+              aria-label={`abrir ${cell.key}`}
+              className="flex flex-1 cursor-pointer flex-col items-center gap-1.5 border-none bg-transparent p-0"
+            >
               <div
                 className="h-[42px] w-full rounded-xl"
                 style={{
@@ -248,7 +263,7 @@ export function Hoje({ onRegistrar, onOpenLinha }: { onRegistrar: () => void; on
               >
                 {cell.letter}
               </span>
-            </div>
+            </button>
           ))}
         </div>
       </div>

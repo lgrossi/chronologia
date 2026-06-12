@@ -160,7 +160,11 @@ function Shell() {
           <Route
             path="/"
             element={
-              <Hoje onRegistrar={() => openRegistro()} onOpenLinha={() => navigate('/linha')} />
+              <Hoje
+                onRegistrar={() => openRegistro()}
+                onOpenLinha={() => navigate('/linha')}
+                onOpenDay={(k) => openRegistro(k)}
+              />
             }
           />
           <Route

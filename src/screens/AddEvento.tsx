@@ -86,7 +86,13 @@ const sectionTitle: CSSProperties = {
 
 export function AddEvento({ dateKey, eventId, onClose, onSaved }: AddEventoProps) {
   const medications = useMedications();
-  const med = medications[0];
+  // An infusion binds to an infusion-cadence med (weekly+), never a daily
+  // maintenance med — the cycle on Hoje/Tendências reads the infusion event's
+  // medicationId, so picking a daily med here would corrupt it. EDIT mode
+  // preserves the event's own medication via medId.
+  const defaultInfusionMed = medications.find((m) => m.intervalDays >= 7) ?? medications[0] ?? null;
+  const [medId, setMedId] = useState<string | undefined>(undefined);
+  const med = medications.find((m) => m.id === medId) ?? defaultInfusionMed;
 
   const isEdit = Boolean(eventId);
 
@@ -111,6 +117,7 @@ export function AddEvento({ dateKey, eventId, onClose, onSaved }: AddEventoProps
       if (!active || !event) return;
       setType(event.type);
       setChosenKey(event.date);
+      setMedId(event.medicationId);
       setRemind(event.remindNextDoseDays != null);
       setExistingAttachment(event.attachments?.[0] ?? null);
       setNote(event.note ?? '');

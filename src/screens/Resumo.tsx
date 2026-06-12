@@ -35,6 +35,7 @@ import {
 import {
   cycleCurveSeries,
   cycleStatus,
+  infusionMedication,
   monthRollup,
   topSymptoms,
 } from '@/lib/selectors';
@@ -77,7 +78,6 @@ export function Resumo() {
   const profile = useProfile();
   const meds = useMedications();
 
-  const med = meds[0] ?? null;
   // Most recent infusion within the month anchors the cycle insight.
   const infusions = events.filter((e) => e.type === 'infusao');
   const inMonthInfusion = infusions.length ? infusions[infusions.length - 1] : null;
@@ -106,6 +106,7 @@ export function Resumo() {
   }, [inMonthInfusion, from]);
 
   const lastInfusion = inMonthInfusion ?? priorInfusion;
+  const med = infusionMedication(meds, lastInfusion);
 
   const roll = monthRollup(days);
   const total = roll.bom + roll.mid + roll.ruim;

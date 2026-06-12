@@ -27,6 +27,7 @@ import {
 } from '@/lib/date';
 import {
   cycleCurveSeries,
+  infusionMedication,
   monthRollup,
   topSymptoms,
   type CyclePoint,
@@ -97,7 +98,6 @@ export function Tendencias({ onExport }: TendenciasProps) {
 
   // Cycle curve: anchor on the most recent infusion AT OR BEFORE the month end,
   // so a cycle that began in a prior month still reads correctly this month.
-  const med = medications[0] ?? null;
   const inMonthInfusion = useMemo(() => {
     const infusions = events.filter((e) => e.type === 'infusao');
     return infusions.length ? infusions[infusions.length - 1] : null;
@@ -129,6 +129,7 @@ export function Tendencias({ onExport }: TendenciasProps) {
   }, [inMonthInfusion, monthStart]);
 
   const lastInfusion = inMonthInfusion ?? priorInfusion;
+  const med = infusionMedication(medications, lastInfusion);
 
   const curve = useMemo(
     () => cycleCurveSeries(days, lastInfusion, med),
