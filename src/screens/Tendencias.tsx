@@ -16,7 +16,15 @@ import { Card } from '@/components/Card';
 import { Icon } from '@/components/Icon';
 import { repo } from '@/data/repo';
 import { useDaysInRange, useEventsInRange, useMedications } from '@/data/hooks';
-import { addDays, localDayKey, monthNamePt, parseDayKey } from '@/lib/date';
+import {
+  addDays,
+  capitalize,
+  daysInMonth,
+  localDayKey,
+  monthNamePt,
+  monthStartKey,
+  parseDayKey,
+} from '@/lib/date';
 import {
   cycleCurveSeries,
   monthRollup,
@@ -31,20 +39,10 @@ export interface TendenciasProps {
   onExport: () => void;
 }
 
-/** First day-key of the calendar month containing `key` (e.g. '2026-06-14' → '2026-06-01'). */
-function monthStartKey(key: string): string {
-  return `${key.slice(0, 7)}-01`;
-}
-
 /** First day-key of the next calendar month after the month containing `key`. */
 function nextMonthStartKey(key: string): string {
   const d = parseDayKey(key);
   return localDayKey(new Date(d.getFullYear(), d.getMonth() + 1, 1));
-}
-
-/** Capitalize the first letter (pt-BR month name → 'Junho'). */
-function cap(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 export function Tendencias({ onExport }: TendenciasProps) {
@@ -137,7 +135,7 @@ export function Tendencias({ onExport }: TendenciasProps) {
     [days, lastInfusion, med],
   );
 
-  const monthName = cap(monthNamePt(monthStart));
+  const monthName = capitalize(monthNamePt(monthStart));
   const year = monthStart.slice(0, 4);
 
   const empty = total === 0;
@@ -315,12 +313,6 @@ function SectionTitle({ children }: { children: string }) {
       {children}
     </div>
   );
-}
-
-/** Days in the calendar month of `monthStart` — denominator for the symptom bars. */
-function daysInMonth(monthStart: string): number {
-  const d = parseDayKey(monthStart);
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
 }
 
 const VB_W = 300;

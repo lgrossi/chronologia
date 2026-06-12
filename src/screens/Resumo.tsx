@@ -8,6 +8,7 @@
  * through the reactive hooks — proportion, cycle insight, top symptoms, and a
  * day-by-day table of logged days with infusion events folded in by date.
  */
+import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -16,13 +17,21 @@ import { Icon } from '@/components/Icon';
 import { HFace } from '@/components/HFace';
 import { SevDots } from '@/components/SevDots';
 import { COLORS, WELLBEING } from '@/theme/tokens';
+import { repo } from '@/data/repo';
 import {
   useDaysInRange,
   useEventsInRange,
   useMedications,
   useProfile,
 } from '@/data/hooks';
-import { addDays, localDayKey, monthNamePt, parseDayKey } from '@/lib/date';
+import {
+  addDays,
+  localDayKey,
+  monthEndKey,
+  monthNamePt,
+  monthStartKey,
+  parseDayKey,
+} from '@/lib/date';
 import {
   cycleCurveSeries,
   cycleStatus,
@@ -30,14 +39,6 @@ import {
   topSymptoms,
 } from '@/lib/selectors';
 import type { DayLog, HealthEvent } from '@/lib/types';
-
-/** First and last day-keys of the month containing `anchorKey`. */
-function monthBounds(anchorKey: string): { from: string; to: string } {
-  const d = parseDayKey(anchorKey);
-  const first = localDayKey(new Date(d.getFullYear(), d.getMonth(), 1));
-  const last = localDayKey(new Date(d.getFullYear(), d.getMonth() + 1, 0));
-  return { from: first, to: last };
-}
 
 /**
  * Resolve the anchor day-key from ?month=YYYY-MM. Falls back to the current
@@ -67,7 +68,8 @@ interface DayRow {
 export function Resumo() {
   const [params] = useSearchParams();
   const anchor = resolveAnchor(params.get('month'));
-  const { from, to } = monthBounds(anchor);
+  const from = monthStartKey(anchor);
+  const to = monthEndKey(anchor);
   const year = parseDayKey(anchor).getFullYear();
 
   const days = useDaysInRange(from, to);
@@ -78,7 +80,32 @@ export function Resumo() {
   const med = meds[0] ?? null;
   // Most recent infusion within the month anchors the cycle insight.
   const infusions = events.filter((e) => e.type === 'infusao');
-  const lastInfusion = infusions.length ? infusions[infusions.length - 1] : null;
+  const inMonthInfusion = infusions.length ? infusions[infusions.length - 1] : null;
+
+  // The 8-week (56-day) cycle routinely spans two calendar months, so when no
+  // infusion falls in the printed month, reach back for the cycle that was
+  // already running when the month began (mirrors Tendencias' anchor logic) —
+  // otherwise the headline doctor handout shows no cycle reading.
+  const [priorInfusion, setPriorInfusion] = useState<HealthEvent | null>(null);
+  useEffect(() => {
+    if (inMonthInfusion) {
+      setPriorInfusion(null);
+      return;
+    }
+    let alive = true;
+    void (async () => {
+      const before = addDays(from, -1);
+      const all = await repo.listEvents(addDays(from, -400), before);
+      const past = all.filter((e) => e.type === 'infusao');
+      const latest = past.length ? past.reduce((a, b) => (a.date > b.date ? a : b)) : null;
+      if (alive) setPriorInfusion(latest);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [inMonthInfusion, from]);
+
+  const lastInfusion = inMonthInfusion ?? priorInfusion;
 
   const roll = monthRollup(days);
   const total = roll.bom + roll.mid + roll.ruim;

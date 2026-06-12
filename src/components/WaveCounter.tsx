@@ -18,8 +18,8 @@ const MAX = 6;
 
 function stepStyle(primary: boolean) {
   return {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: 12,
     cursor: 'pointer',
     fontSize: 22,

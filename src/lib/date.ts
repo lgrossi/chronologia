@@ -34,7 +34,7 @@ export function daysBetween(fromKey: string, toKey: string): number {
 }
 
 // Single-letter pt-BR weekday headers, Monday-first: S T Q Q S S D.
-const WEEKDAY_LETTERS_PT = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D'] as const;
+export const WEEKDAY_LETTERS_PT = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D'] as const;
 
 /** Weekday letter (S T Q Q S S D), Monday=index 0. */
 export function weekdayLetterPt(key: string): string {
@@ -51,6 +51,34 @@ export function monthNamePt(key: string): string {
 /** e.g. 'domingo, 10 jun' — full weekday, day, short month. */
 export function formatLongPt(key: string): string {
   return format(parseDayKey(key), "EEEE, d MMM", { locale: ptBR });
+}
+
+/** e.g. 'domingo · 10 junho' — full weekday, middot, day, full month (Hoje subline). */
+export function formatGreetingPt(key: string): string {
+  return format(parseDayKey(key), "EEEE '·' d MMMM", { locale: ptBR });
+}
+
+/** First day-key of the calendar month containing `key` (e.g. '2026-06-14' → '2026-06-01'). */
+export function monthStartKey(key: string): string {
+  const d = parseDayKey(key);
+  return localDayKey(new Date(d.getFullYear(), d.getMonth(), 1));
+}
+
+/** Last day-key of the calendar month containing `key`. */
+export function monthEndKey(key: string): string {
+  const d = parseDayKey(key);
+  return localDayKey(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+}
+
+/** Number of days in the calendar month of `key`. */
+export function daysInMonth(key: string): number {
+  const d = parseDayKey(key);
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+}
+
+/** Capitalize the first letter (month names come back lowercased). */
+export function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 /** Monday of the week containing `key`, as a day-key. */

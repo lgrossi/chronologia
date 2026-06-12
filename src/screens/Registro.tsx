@@ -15,7 +15,7 @@ import type { CSSProperties } from 'react';
 import { COLORS } from '@/theme/tokens';
 import type { DayLog, Mood, Severity } from '@/lib/types';
 import { SNAPS, sampleSev, baseSev, nextSeverity } from '@/lib/severity';
-import { formatLongPt } from '@/lib/date';
+import { formatLongPt, localDayKey } from '@/lib/date';
 import { repo } from '@/data/repo';
 import { useSymptoms } from '@/data/hooks';
 import { Icon } from '@/components/Icon';
@@ -138,9 +138,10 @@ export function Registro({ dateKey, onClose, onSaved }: RegistroProps) {
       overallSeverity: hadSymptoms ? baseSev(snap.p) : null,
       waveCount: hadSymptoms ? count : 0,
       symptoms: hadSymptoms
-        ? symptoms
-            .filter((s) => sevByName[s.name] != null)
-            .map((s) => ({ name: s.name, severity: sevByName[s.name] }))
+        ? symptoms.flatMap((s) => {
+            const sev = sevByName[s.name];
+            return sev ? [{ name: s.name, severity: sev }] : [];
+          })
         : [],
       note: note.trim() ? note.trim() : undefined,
     };
@@ -174,7 +175,7 @@ export function Registro({ dateKey, onClose, onSaved }: RegistroProps) {
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700 }}>
             {formatLongPt(dateKey)}
           </div>
-          <div style={{ width: 38 }} />
+          <div style={{ width: 44 }} />
         </div>
 
         {!loaded ? null : (
@@ -198,7 +199,7 @@ export function Registro({ dateKey, onClose, onSaved }: RegistroProps) {
                   marginBottom: 16,
                 }}
               >
-                Como você passou hoje?
+                {dateKey === localDayKey() ? 'Como você passou hoje?' : 'Como foi esse dia?'}
               </div>
               <div style={{ display: 'flex', justifyContent: 'center', gap: 18 }}>
                 {MOOD_OPTIONS.map(([m, lbl]) => {
@@ -474,8 +475,8 @@ export function Registro({ dateKey, onClose, onSaved }: RegistroProps) {
 }
 
 const iconBtn: CSSProperties = {
-  width: 38,
-  height: 38,
+  width: 44,
+  height: 44,
   borderRadius: '50%',
   border: `1.5px solid ${COLORS.line}`,
   background: COLORS.card,

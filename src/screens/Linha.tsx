@@ -22,10 +22,15 @@ import { COLORS, SEV } from '@/theme/tokens';
 import type { DayLog, Severity } from '@/lib/types';
 import {
   addDays,
+  capitalize,
+  daysInMonth,
   formatLongPt,
   localDayKey,
+  monthEndKey,
   monthNamePt,
+  monthStartKey,
   parseDayKey,
+  WEEKDAY_LETTERS_PT,
 } from '@/lib/date';
 import { useDaysInRange, useEventsInRange } from '@/data/hooks';
 
@@ -39,26 +44,7 @@ export interface LinhaProps {
 type View = 'cal' | 'dia';
 
 const FILTERS = ['tudo', 'diarreia', 'pontadas', 'cansaço', 'infusão'] as const;
-const WEEKDAY_HEADER = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D'] as const;
 const WD_SHORT = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom'] as const;
-
-/** First day-key of the calendar month containing `key`. */
-function monthStartKey(key: string): string {
-  const d = parseDayKey(key);
-  return localDayKey(new Date(d.getFullYear(), d.getMonth(), 1));
-}
-
-/** Last day-key of the calendar month containing `key`. */
-function monthEndKey(key: string): string {
-  const d = parseDayKey(key);
-  return localDayKey(new Date(d.getFullYear(), d.getMonth() + 1, 0));
-}
-
-/** Number of days in the calendar month of `key`. */
-function daysInMonth(key: string): number {
-  const d = parseDayKey(key);
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-}
 
 /** Monday-first column index (0..6) the 1st of the month lands on. */
 function leadingBlanks(monthStart: string): number {
@@ -70,11 +56,6 @@ function leadingBlanks(monthStart: string): number {
 function weekdayShortPt(key: string): string {
   const dow = parseDayKey(key).getDay();
   return WD_SHORT[(dow + 6) % 7];
-}
-
-/** Capitalize the first letter (month names come back lowercased). */
-function cap(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 export function Linha({ filter, setFilter, onEditDay, onAddEvento }: LinhaProps) {
@@ -120,7 +101,7 @@ export function Linha({ filter, setFilter, onEditDay, onAddEvento }: LinhaProps)
           }}
         >
           <div style={{ fontFamily: 'Schibsted Grotesk, sans-serif', fontSize: 26, fontWeight: 700 }}>
-            {cap(monthNamePt(month))}
+            {capitalize(monthNamePt(month))}
           </div>
           <div
             style={{
@@ -250,7 +231,7 @@ function CalendarView({
           marginBottom: 5,
         }}
       >
-        {WEEKDAY_HEADER.map((d, i) => (
+        {WEEKDAY_LETTERS_PT.map((d, i) => (
           <div key={i} style={{ textAlign: 'center', fontSize: 11.5, color: COLORS.faint }}>
             {d}
           </div>
@@ -486,7 +467,7 @@ function DayDetail({ dateKey, log, hasInfusion, infusionNote, onEditDay, onClose
       >
         <div>
           <div style={{ fontFamily: 'Schibsted Grotesk, sans-serif', fontSize: 24, fontWeight: 700 }}>
-            {cap(formatLongPt(dateKey))}
+            {capitalize(formatLongPt(dateKey))}
           </div>
         </div>
         {log && (

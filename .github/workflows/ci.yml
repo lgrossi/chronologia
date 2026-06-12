@@ -20,7 +20,7 @@ jobs:
           cache: pnpm
 
       - name: Install
-        run: pnpm install --frozen-lockfile=false
+        run: pnpm install --frozen-lockfile
 
       - name: Typecheck
         run: pnpm typecheck

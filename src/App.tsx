@@ -7,12 +7,14 @@
  * only the overlay and the Linha filter. `/resumo` is the print view: it
  * renders full-screen with no tab bar and no overlays.
  */
+import { useEffect } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { COLORS } from '@/theme/tokens';
 import { ToastProvider, ToastHost, useToast } from '@/components/Toast';
 import { TabBar } from '@/components/TabBar';
 import { useStore, type Tab } from '@/store';
 import { localDayKey } from '@/lib/date';
+import type { ReminderNudge } from '@/lib/reminders';
 import { Hoje } from '@/screens/Hoje';
 import { Linha } from '@/screens/Linha';
 import { Tendencias } from '@/screens/Tendencias';
@@ -52,11 +54,25 @@ export default function App() {
 function Shell() {
   const location = useLocation();
   const navigate = useNavigate();
+  const toast = useToast();
   const setTab = useStore((s) => s.setTab);
   const filter = useStore((s) => s.filter);
   const setFilter = useStore((s) => s.setFilter);
   const openRegistro = useStore((s) => s.openRegistro);
   const openEvento = useStore((s) => s.openEvento);
+
+  // Surface the foreground reminder nudge in-app (reminders.ts fires this even
+  // when OS notification permission is denied). The toast is the visible prompt;
+  // stale-day events are ignored so a backgrounded tab can't nag for yesterday.
+  useEffect(() => {
+    const onNudge = (e: Event) => {
+      const { text, dayKey } = (e as CustomEvent<ReminderNudge>).detail;
+      if (dayKey !== localDayKey()) return;
+      toast.show(text);
+    };
+    window.addEventListener('chronologia:reminder', onNudge);
+    return () => window.removeEventListener('chronologia:reminder', onNudge);
+  }, [toast]);
 
   // The print view owns the whole viewport: no shell chrome, no overlays.
   if (location.pathname.startsWith('/resumo')) {

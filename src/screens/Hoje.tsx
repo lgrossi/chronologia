@@ -13,7 +13,7 @@ import { Icon } from '@/components/Icon';
 import { COLORS, SEV } from '@/theme/tokens';
 import {
   addDays,
-  formatLongPt,
+  formatGreetingPt,
   localDayKey,
   weekKeysMonday,
 } from '@/lib/date';
@@ -22,6 +22,13 @@ import type { DayLog, Mood } from '@/lib/types';
 
 /** Display word for a mood (the recap bolds it as the day's character). */
 const MOOD_WORD: Record<Mood, string> = { bom: 'bom', neutro: 'neutro', ruim: 'ruim' };
+
+/** Time-of-day salutation from the device-local hour (same clock as the day-key). */
+function greetingPt(hour: number): string {
+  if (hour < 12) return 'Bom dia';
+  if (hour < 18) return 'Boa tarde';
+  return 'Boa noite';
+}
 
 /** "{count}× {sev}" when there were waves, else "dia tranquilo". */
 function recapSubline(log: DayLog): string {
@@ -65,10 +72,10 @@ export function Hoje({ onRegistrar, onOpenLinha }: { onRegistrar: () => void; on
             Chronologia
           </div>
           <div className="mt-1.5 font-display text-3xl font-bold leading-none">
-            Bom dia, {profile.name}
+            {greetingPt(new Date().getHours())}, {profile.name}
           </div>
           <div className="mt-1 text-[14.5px]" style={{ color: COLORS.soft }}>
-            {formatLongPt(todayKey)}
+            {formatGreetingPt(todayKey)}
           </div>
         </div>
         <div

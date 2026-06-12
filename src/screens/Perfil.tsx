@@ -13,7 +13,8 @@ import {
   useSymptoms,
 } from '@/data/hooks';
 import { repo } from '@/data/repo';
-import type { Backup, HealthEvent, Medication, Profile, Symptom } from '@/lib/types';
+import type { HealthEvent, Medication, Profile, Symptom } from '@/lib/types';
+import { toBackup, toBackupFile } from '@/lib/backup';
 import { localDayKey, formatLongPt } from '@/lib/date';
 import { COLORS } from '@/theme/tokens';
 import { Icon, type IconName } from '@/components/Icon';
@@ -396,8 +397,7 @@ function SymptomsEditor({ symptoms }: { symptoms: Symptom[] }) {
   const add = async () => {
     const name = newName.trim();
     if (!name) return;
-    const id = `custom-${Date.now()}`;
-    await repo.putSymptom({ id, name, isPreset: false, archived: false });
+    await repo.putSymptom({ id: crypto.randomUUID(), name, isPreset: false, archived: false });
     setNewName('');
   };
 
@@ -591,8 +591,8 @@ function BackupPanel() {
   const [status, setStatus] = useState<string | null>(null);
 
   const exportData = async () => {
-    const backup = await repo.exportAll();
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const file = await toBackupFile(await repo.exportAll());
+    const blob = new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -610,8 +610,8 @@ function BackupPanel() {
     if (!file) return;
     try {
       const text = await file.text();
-      const parsed = JSON.parse(text) as Backup;
-      await repo.importAll(parsed);
+      const backup = toBackup(JSON.parse(text));
+      await repo.importAll(backup);
       setStatus('Dados importados.');
     } catch {
       setStatus('Arquivo inválido — não foi possível importar.');

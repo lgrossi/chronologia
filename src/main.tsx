@@ -16,27 +16,16 @@ import '@fontsource/schibsted-grotesk/800.css';
 
 import { repo } from '@/data/repo';
 import { seedIfEmpty } from '@/data/seed';
-import { initReminders, type ReminderNudge } from '@/lib/reminders';
+import { initReminders } from '@/lib/reminders';
 import { localDayKey } from '@/lib/date';
 import type { ReminderSettings } from '@/lib/types';
 
-/**
- * Foreground-nudge contract (see reminders.ts §INTEGRATION). The CustomEvent
- * always fires when a daily reminder is due; a native Notification also fires
- * when permission is granted. We listen so the nudge is observable in-app even
- * without OS permission; the native Notification (when granted) is the visible
- * prompt and is handled inside the reminders module.
- */
-function wireReminderNudge(): void {
-  window.addEventListener('chronologia:reminder', (e) => {
-    const { dayKey } = (e as CustomEvent<ReminderNudge>).detail;
-    if (dayKey !== localDayKey()) return; // ignore stale-day events
-  });
-}
-
 async function bootstrap(): Promise<void> {
   await seedIfEmpty();
-  wireReminderNudge();
+
+  // The foreground nudge is surfaced in-app by the React shell (App.tsx), which
+  // listens for `chronologia:reminder` and shows a toast — see reminders.ts
+  // §FOREGROUND-NUDGE CONTRACT.
 
   // initReminders' isTodayLogged hook is synchronous; back it with a small
   // cache refreshed on tab focus so a nudge never nags after today is logged.
