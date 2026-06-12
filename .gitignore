@@ -7,3 +7,6 @@ dev-dist
 # local tooling
 .pi/
 .noether/
+
+# single-package repo: pnpm may regenerate this build-approval stub; do not track
+pnpm-workspace.yaml
