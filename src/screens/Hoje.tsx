@@ -61,7 +61,7 @@ export function Hoje({ onRegistrar, onOpenLinha }: { onRegistrar: () => void; on
   const avatarLetter = profile.name.trim().charAt(0).toUpperCase() || 'A';
 
   return (
-    <div className="screen-px mx-auto flex w-full max-w-[480px] flex-col gap-4 pb-28 pt-3">
+    <div className="flex w-full flex-col gap-4">
       {/* greeting */}
       <div className="flex items-start justify-between">
         <div>

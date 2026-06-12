@@ -112,10 +112,14 @@ button {
   padding-right: env(safe-area-inset-right);
 }
 
-/* Consistent, safe-area-aware horizontal page padding. Every screen's content
- * column uses this so nothing ever sits flush to the screen edge or under a
- * notch / rounded corner. Single source of truth — change --screen-px once. */
-.screen-px {
+/* The single content frame for every tab screen. Padding lives HERE and only
+ * here — screens add no margins of their own — so all four tabs share one
+ * identical, safe-area-aware gutter and one tab-bar clearance. Overlays
+ * (Registro/AddEvento/Onboarding/Resumo) render outside this and use the same
+ * --screen-px-* vars, so their gutters match. Change --screen-px once to retune. */
+.screen-main {
+  padding-top: calc(24px + env(safe-area-inset-top));
+  padding-bottom: 112px; /* clears the fixed bottom tab bar */
   padding-left: var(--screen-px-left);
   padding-right: var(--screen-px-right);
 }

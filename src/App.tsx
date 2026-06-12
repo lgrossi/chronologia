@@ -155,29 +155,31 @@ function Shell() {
         overflow: 'hidden',
       }}
     >
-      <Routes>
-        <Route
-          path="/"
-          element={
-            <Hoje onRegistrar={() => openRegistro()} onOpenLinha={() => navigate('/linha')} />
-          }
-        />
-        <Route
-          path="/linha"
-          element={
-            <Linha
-              onEditDay={(k) => openRegistro(k)}
-              onAddEvento={(k) => openEvento(k)}
-              onEditEvento={(id, k) => openEvento(k, id)}
-            />
-          }
-        />
-        <Route
-          path="/tendencias"
-          element={<Tendencias onExport={() => navigate('/resumo' + currentMonthQuery())} />}
-        />
-        <Route path="/perfil" element={<Perfil />} />
-      </Routes>
+      <main className="screen-main">
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <Hoje onRegistrar={() => openRegistro()} onOpenLinha={() => navigate('/linha')} />
+            }
+          />
+          <Route
+            path="/linha"
+            element={
+              <Linha
+                onEditDay={(k) => openRegistro(k)}
+                onAddEvento={(k) => openEvento(k)}
+                onEditEvento={(id, k) => openEvento(k, id)}
+              />
+            }
+          />
+          <Route
+            path="/tendencias"
+            element={<Tendencias onExport={() => navigate('/resumo' + currentMonthQuery())} />}
+          />
+          <Route path="/perfil" element={<Perfil />} />
+        </Routes>
+      </main>
 
       <TabBar active={active} onTab={onTab} />
       <OverlayHost />

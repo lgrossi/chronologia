@@ -146,7 +146,7 @@ export function Tendencias({ onExport }: TendenciasProps) {
       : 'Um mês mais desafiador — vale conversar na consulta.';
 
   return (
-    <div className="screen-px flex flex-col">
+    <div className="flex flex-col">
       {/* Month nav */}
       <div className="flex items-center justify-between" style={{ marginBottom: 4 }}>
         <NavButton dir="chevL" disabled={atOldest} onClick={goPrev} />

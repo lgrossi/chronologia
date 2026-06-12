@@ -173,8 +173,8 @@ export function Linha({ onEditDay, onAddEvento, onEditEvento }: LinhaProps) {
   const blanks = leadingBlanks(monthStart);
 
   return (
-    <div className="screen-px min-h-screen bg-paper pt-14 pb-28 font-sans text-ink">
-      <div className="mx-auto w-full" style={{ maxWidth: 480 }}>
+    <div className="font-sans text-ink">
+      <div className="w-full">
         {/* Header: ‹ month › + Calendário|Diário toggle */}
         <div
           style={{
