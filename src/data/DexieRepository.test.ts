@@ -156,6 +156,23 @@ describe('Reminders and Profile singletons', () => {
     expect(await repo.getProfile()).toEqual(DEFAULT_PROFILE);
   });
 
+  it('default profile is empty and not onboarded (the first-run gate)', async () => {
+    const profile = await repo.getProfile();
+    expect(profile.name).toBe('');
+    expect(profile.onboarded).toBe(false);
+  });
+
+  it('round-trips an onboarded profile so the gate flips persistently', async () => {
+    const onboarded: Profile = {
+      name: 'Ana',
+      condition: 'Crohn',
+      sinceYear: 2019,
+      onboarded: true,
+    };
+    await repo.putProfile(onboarded);
+    expect(await repo.getProfile()).toEqual(onboarded);
+  });
+
   it('round-trips custom reminders', async () => {
     const reminders: ReminderSettings = { dailyEnabled: false, dailyTime: '07:30' };
     await repo.putReminders(reminders);
@@ -168,6 +185,7 @@ describe('Reminders and Profile singletons', () => {
       condition: 'Crohn',
       sinceYear: 2019,
       email: 'ana@example.com',
+      onboarded: true,
     };
     await repo.putProfile(profile);
     expect(await repo.getProfile()).toEqual(profile);
@@ -188,7 +206,7 @@ describe('exportAll / importAll identity', () => {
     await repo.putSymptom({ id: 'enxaqueca', name: 'enxaqueca', isPreset: false, archived: true });
     await repo.putMedication({ id: 'infliximabe', name: 'Infliximabe', intervalDays: 56 });
     await repo.putReminders({ dailyEnabled: false, dailyTime: '06:15' });
-    await repo.putProfile({ name: 'Ana', condition: 'Crohn', sinceYear: 2020, email: 'ana@x.com' });
+    await repo.putProfile({ name: 'Ana', condition: 'Crohn', sinceYear: 2020, email: 'ana@x.com', onboarded: true });
 
     const first = await repo.exportAll();
 
@@ -217,7 +235,7 @@ describe('exportAll / importAll identity', () => {
       symptoms: [{ id: 'gases', name: 'gases', isPreset: true, archived: false }],
       medications: [{ id: 'infliximabe', name: 'Infliximabe', intervalDays: 56 }],
       reminders: { dailyEnabled: true, dailyTime: '20:00' },
-      profile: { name: 'Ana', condition: 'Crohn', sinceYear: 2021 },
+      profile: { name: 'Ana', condition: 'Crohn', sinceYear: 2021, onboarded: true },
     };
 
     await repo.importAll(backup);
@@ -226,6 +244,32 @@ describe('exportAll / importAll identity', () => {
     expect(await repo.listEvents('2099-01-01', '2099-12-31')).toEqual([]);
     expect(await repo.getDay('2026-06-01')).toEqual(backup.days[0]);
     expect((await repo.listEvents('2026-06-01', '2026-06-30')).map((e) => e.id)).toEqual(['fresh']);
+  });
+
+  it('round-trip preserves the onboarded gate so a restored backup never re-runs onboarding', async () => {
+    // Targeted regression for the first-run gate specifically: if importAll
+    // dropped or reset profile.onboarded, a restore would bounce the user back
+    // into onboarding. The broad identity test would catch a wholesale profile
+    // loss, but this pins the single boolean that gates the whole app.
+    await repo.putProfile({
+      name: 'Ana',
+      condition: 'Crohn',
+      sinceYear: 2020,
+      email: 'ana@x.com',
+      onboarded: true,
+    });
+
+    const backup = await repo.exportAll();
+    expect(backup.profile.onboarded).toBe(true);
+
+    await freshDb();
+    repo = new DexieRepository(db);
+    // Sanity: the fresh store is back to the not-onboarded default.
+    expect((await repo.getProfile()).onboarded).toBe(false);
+
+    await repo.importAll(backup);
+
+    expect((await repo.getProfile()).onboarded).toBe(true);
   });
 });
 
@@ -236,7 +280,7 @@ function stripExportedAt(b: Backup): Omit<Backup, 'exportedAt'> {
 }
 
 describe('seedIfEmpty idempotency', () => {
-  it('seeds 6 preset symptoms and Infliximabe (56d) on an empty db', async () => {
+  it('seeds only the 6 preset symptoms — no medication, no profile', async () => {
     await seedIfEmpty();
 
     const symptoms = await repo.listSymptoms();
@@ -248,14 +292,17 @@ describe('seedIfEmpty idempotency', () => {
       ['cansaço', 'diarreia', 'gases', 'intestino ativo', 'náusea', 'pontadas'].sort(),
     );
 
-    expect(medications).toEqual([{ id: 'infliximabe', name: 'Infliximabe', intervalDays: 56 }]);
+    // A fresh device starts with no medication; onboarding collects it.
+    expect(medications).toEqual([]);
+    // The seed must not pre-onboard a profile.
+    expect((await repo.getProfile()).onboarded).toBe(false);
   });
 
-  it('does not duplicate when called twice', async () => {
+  it('does not duplicate presets when called twice', async () => {
     await seedIfEmpty();
     await seedIfEmpty();
 
     expect(await repo.listSymptoms()).toHaveLength(6);
-    expect(await repo.listMedications()).toHaveLength(1);
+    expect(await repo.listMedications()).toEqual([]);
   });
 });

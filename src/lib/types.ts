@@ -56,6 +56,8 @@ export interface Profile {
   condition: string;
   sinceYear: number;
   email?: string;
+  /** First-run gate: false until onboarding completes. */
+  onboarded: boolean;
 }
 
 export interface Backup {

@@ -8,6 +8,7 @@
  * renders full-screen with no tab bar and no overlays.
  */
 import { useEffect } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { COLORS } from '@/theme/tokens';
 import { ToastProvider, ToastHost, useToast } from '@/components/Toast';
@@ -15,6 +16,8 @@ import { TabBar } from '@/components/TabBar';
 import { useStore, type Tab } from '@/store';
 import { localDayKey } from '@/lib/date';
 import type { ReminderNudge } from '@/lib/reminders';
+import type { Profile } from '@/lib/types';
+import { META_KEYS, db } from '@/data/db';
 import { Hoje } from '@/screens/Hoje';
 import { Linha } from '@/screens/Linha';
 import { Tendencias } from '@/screens/Tendencias';
@@ -22,6 +25,7 @@ import { Perfil } from '@/screens/Perfil';
 import { Resumo } from '@/screens/Resumo';
 import { Registro } from '@/screens/Registro';
 import { AddEvento } from '@/screens/AddEvento';
+import { Onboarding } from '@/screens/Onboarding';
 
 /** Map a pathname to the active tab; everything non-tabbed falls back to Hoje. */
 function tabForPath(pathname: string): Tab {
@@ -46,8 +50,60 @@ function currentMonthQuery(): string {
 export default function App() {
   return (
     <ToastProvider>
-      <Shell />
+      <Gate />
     </ToastProvider>
+  );
+}
+
+/**
+ * First-run gate. Reads the stored profile directly (not via useProfile, which
+ * substitutes DEFAULT_PROFILE — onboarded:false — while loading and would flash
+ * Onboarding at an already-onboarded user). The raw liveQuery is `undefined`
+ * until the meta row resolves: that window renders a calm splash, never the
+ * main app. Once loaded, an un-onboarded profile gets the full-screen
+ * Onboarding with no shell chrome; completing it writes onboarded:true, the
+ * liveQuery re-fires, and this flips to the normal shell automatically.
+ */
+function Gate() {
+  const navigate = useNavigate();
+  const stored = useLiveQuery(async () => {
+    const row = await db.meta.get(META_KEYS.profile);
+    return (row?.value as Profile | undefined) ?? null;
+  }, []);
+
+  if (stored === undefined) return <Splash />;
+
+  if (!stored?.onboarded) {
+    return <Onboarding onDone={() => navigate('/')} />;
+  }
+
+  return <Shell />;
+}
+
+/** Minimal calm splash shown only while the profile load is in flight. */
+function Splash() {
+  return (
+    <div
+      style={{
+        minHeight: '100dvh',
+        background: COLORS.paper,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <div
+        style={{
+          fontFamily: 'var(--font-display)',
+          fontSize: 28,
+          fontWeight: 800,
+          color: COLORS.accent,
+          letterSpacing: '-0.01em',
+        }}
+      >
+        Chronologia
+      </div>
+    </div>
   );
 }
 

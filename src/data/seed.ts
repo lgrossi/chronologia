@@ -2,12 +2,11 @@
  * First-run seed. Idempotent: if any symptoms already exist we assume the seed
  * ran and do nothing, so calling this on every app init is safe.
  *
- * Seeds the six preset symptoms (the Registro checklist) and the primary
- * medication, Infliximabe on an 8-week (56-day) cycle — the anchor for
- * `cycleStatus`. The "dia 6 · faltam 22" / 28-day numbers in the prototype are
- * mock; the real cycle is 56 days.
+ * Seeds ONLY the six preset symptoms (the Registro checklist). A fresh device
+ * starts with no medication and a not-onboarded empty profile — onboarding
+ * collects the person's name, condition, and first medication.
  */
-import type { Medication, Symptom } from '@/lib/types';
+import type { Symptom } from '@/lib/types';
 import { db } from './db';
 
 const PRESET_SYMPTOMS: readonly string[] = [
@@ -18,12 +17,6 @@ const PRESET_SYMPTOMS: readonly string[] = [
   'intestino ativo',
   'náusea',
 ];
-
-const PRIMARY_MEDICATION: Medication = {
-  id: 'infliximabe',
-  name: 'Infliximabe',
-  intervalDays: 56,
-};
 
 export async function seedIfEmpty(): Promise<void> {
   const existing = await db.symptoms.count();
@@ -36,8 +29,5 @@ export async function seedIfEmpty(): Promise<void> {
     archived: false,
   }));
 
-  await db.transaction('rw', db.symptoms, db.medications, async () => {
-    await db.symptoms.bulkPut(symptoms);
-    await db.medications.put(PRIMARY_MEDICATION);
-  });
+  await db.symptoms.bulkPut(symptoms);
 }

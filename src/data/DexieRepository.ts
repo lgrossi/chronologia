@@ -25,10 +25,17 @@ export const DEFAULT_REMINDERS: ReminderSettings = {
   dailyTime: '21:00',
 };
 
+/**
+ * The default profile returned before onboarding: empty and not yet onboarded,
+ * which gates first-run onboarding. `sinceYear` defaults to the device-local
+ * current year so the onboarding form starts on a sensible value.
+ */
 export const DEFAULT_PROFILE: Profile = {
-  name: 'Ana',
+  name: '',
   condition: 'Crohn',
-  sinceYear: 2021,
+  sinceYear: new Date().getFullYear(),
+  email: undefined,
+  onboarded: false,
 };
 
 const BACKUP_VERSION = 1;
