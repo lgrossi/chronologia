@@ -18,6 +18,7 @@ import { Icon, type IconName } from '@/components/Icon';
 import { Btn } from '@/components/Btn';
 import { formatLongWithYearPt } from '@/lib/date';
 import { useMedications } from '@/data/hooks';
+import { isInfusionMed } from '@/lib/selectors';
 import { repo } from '@/data/repo';
 
 export interface AddEventoProps {
@@ -86,13 +87,7 @@ const sectionTitle: CSSProperties = {
 
 export function AddEvento({ dateKey, eventId, onClose, onSaved }: AddEventoProps) {
   const medications = useMedications();
-  // An infusion binds to an infusion-cadence med (weekly+), never a daily
-  // maintenance med — the cycle on Hoje/Tendências reads the infusion event's
-  // medicationId, so picking a daily med here would corrupt it. EDIT mode
-  // preserves the event's own medication via medId.
-  const defaultInfusionMed = medications.find((m) => m.intervalDays >= 7) ?? medications[0] ?? null;
   const [medId, setMedId] = useState<string | undefined>(undefined);
-  const med = medications.find((m) => m.id === medId) ?? defaultInfusionMed;
 
   const isEdit = Boolean(eventId);
 
@@ -129,9 +124,16 @@ export function AddEvento({ dateKey, eventId, onClose, onSaved }: AddEventoProps
   }, [eventId]);
 
   const isInfusao = type === 'infusao';
-  // Medication applies to infusions (drives the cycle) and to "remédio novo".
+  // Medication applies to infusions (the cycle) and to "remédio novo". The pools
+  // are split by cadence: an infusão only offers infusion-cadence meds, a remédio
+  // only offers daily/maintenance meds — so a daily med can never become an
+  // "infusion" (nor drive a "próxima infusão" countdown).
   const showMed = isInfusao || type === 'remedio';
-  // Medication cycle in whole weeks (Infliximabe = 56 days → 8 semanas).
+  const infusionMeds = medications.filter(isInfusionMed);
+  const otherMeds = medications.filter((m) => !isInfusionMed(m));
+  const medPool = isInfusao ? infusionMeds : otherMeds;
+  const med = medPool.find((m) => m.id === medId) ?? medPool[0] ?? null;
+  // Cycle in whole weeks (Infliximabe = 56 days → 8 semanas).
   const weeks = med ? Math.round(med.intervalDays / 7) : null;
 
   // What the attachment row shows: a new pick wins, else the stored one.
@@ -353,7 +355,7 @@ export function AddEvento({ dateKey, eventId, onClose, onSaved }: AddEventoProps
             <div style={sectionTitle}>{isInfusao ? 'Detalhes da infusão' : 'Medicamento'}</div>
             <div style={{ ...rowCard, marginBottom: isInfusao ? 10 : 18 }}>
               <span style={{ fontSize: 15, color: COLORS.soft }}>medicamento</span>
-              {medications.length > 0 ? (
+              {medPool.length > 0 ? (
                 <select
                   value={med?.id ?? ''}
                   onChange={(e) => setMedId(e.target.value || undefined)}
@@ -369,14 +371,18 @@ export function AddEvento({ dateKey, eventId, onClose, onSaved }: AddEventoProps
                     textAlign: 'right',
                   }}
                 >
-                  {medications.map((m) => (
+                  {medPool.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.name || 'sem nome'}
                     </option>
                   ))}
                 </select>
               ) : (
-                <span style={{ fontSize: 14, color: COLORS.faint }}>nenhum — adicione no Perfil</span>
+                <span style={{ fontSize: 14, color: COLORS.faint }}>
+                  {isInfusao
+                    ? 'nenhuma infusão no Perfil (defina 2+ semanas)'
+                    : 'nenhum medicamento no Perfil'}
+                </span>
               )}
             </div>
             {isInfusao && (

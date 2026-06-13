@@ -10,17 +10,30 @@ import type { DayLog, HealthEvent, Medication, Mood, Severity } from './types';
 import { daysBetween, weekKeysMonday, weekdayLetterPt } from './date';
 
 /**
+ * A medication is an INFUSION-CYCLE med (gets the "ciclo da infusão" countdown)
+ * only if its cadence is multi-week. Daily / short-interval meds are maintenance
+ * meds — tracked in the list, but never framed as an infusion or a countdown, so
+ * adding e.g. a daily azatioprina never says "próxima infusão em 1 dia".
+ */
+export const INFUSION_MIN_INTERVAL_DAYS = 14;
+export function isInfusionMed(m: Medication): boolean {
+  return m.intervalDays >= INFUSION_MIN_INTERVAL_DAYS;
+}
+
+/**
  * The medication that drives the infusion cycle: the one referenced by the
- * anchoring infusion EVENT, never just `meds[0]`. Keying off the event keeps the
- * cycle stable when other medications (e.g. daily maintenance meds) are added to
- * the list. Returns null when there is no infusion or its medication is gone.
+ * anchoring infusion EVENT — and only if it's actually an infusion-cadence med.
+ * Keying off the event (not `meds[0]`) keeps the cycle stable as other meds are
+ * added; the cadence guard keeps a daily med from ever driving the countdown.
+ * Returns null when there's no infusion, its med is gone, or its med is daily.
  */
 export function infusionMedication(
   meds: Medication[],
   lastInfusion: HealthEvent | null,
 ): Medication | null {
   if (!lastInfusion?.medicationId) return null;
-  return meds.find((m) => m.id === lastInfusion.medicationId) ?? null;
+  const med = meds.find((m) => m.id === lastInfusion.medicationId) ?? null;
+  return med && isInfusionMed(med) ? med : null;
 }
 
 export interface CycleStatus {

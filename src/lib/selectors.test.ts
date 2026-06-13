@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   cycleStatus,
   infusionMedication,
+  isInfusionMed,
   weekStrip,
   monthRollup,
   topSymptoms,
@@ -47,6 +48,24 @@ describe('infusionMedication', () => {
   });
   it('returns null when the referenced med no longer exists', () => {
     expect(infusionMedication([dailyMed], lastInfusion)).toBeNull();
+  });
+  it('returns null when an infusion event references a daily med (no nonsensical cycle)', () => {
+    const dailyInfusion: HealthEvent = {
+      id: 'e8',
+      date: '2026-06-01',
+      type: 'infusao',
+      medicationId: 'd1',
+    };
+    expect(infusionMedication([dailyMed], dailyInfusion)).toBeNull();
+  });
+});
+
+describe('isInfusionMed', () => {
+  it('treats multi-week cadence as infusion, daily/weekly as maintenance', () => {
+    expect(isInfusionMed({ id: 'a', name: 'Infliximabe', intervalDays: 56 })).toBe(true);
+    expect(isInfusionMed({ id: 'd', name: 'Biweekly', intervalDays: 14 })).toBe(true);
+    expect(isInfusionMed({ id: 'b', name: 'Azatioprina', intervalDays: 1 })).toBe(false);
+    expect(isInfusionMed({ id: 'c', name: 'Weekly', intervalDays: 7 })).toBe(false);
   });
 });
 
