@@ -16,12 +16,15 @@ import { COLORS, SEV } from '@/theme/tokens';
 import {
   addDays,
   formatGreetingPt,
+  formatLongPt,
   localDayKey,
   weekKeysMonday,
 } from '@/lib/date';
-import { cycleStatus, infusionMedication, weekStrip } from '@/lib/selectors';
+import { cycleStatus, infusionMedication, pendingEvents, weekStrip } from '@/lib/selectors';
 import { isReminderDue } from '@/lib/reminders';
-import type { DayLog, Mood } from '@/lib/types';
+import { EVENT_META } from '@/lib/events';
+import { repo } from '@/data/repo';
+import type { DayLog, HealthEvent, Mood } from '@/lib/types';
 
 /** Display word for a mood (the recap bolds it as the day's character). */
 const MOOD_WORD: Record<Mood, string> = { bom: 'bom', neutro: 'neutro', ruim: 'ruim' };
@@ -78,6 +81,13 @@ export function Hoje({
   const med = infusionMedication(meds, lastInfusion);
   const cycle = cycleStatus(todayKey, lastInfusion, med);
   const hasCycle = lastInfusion !== null && cycle.total > 0;
+
+  // Future/overdue events act as reminders until confirmed (done === false).
+  const eventWindow = useEventsInRange(addDays(todayKey, -120), addDays(todayKey, 180));
+  const pending = pendingEvents(eventWindow);
+  const markEventDone = (e: HealthEvent) => {
+    void repo.putEvent({ ...e, done: true });
+  };
 
   const logged = today ?? null;
   const avatarLetter = profile.name.trim().charAt(0).toUpperCase() || 'A';
@@ -233,6 +243,58 @@ export function Hoje({
           </div>
         )}
       </Card>
+
+      {/* próximos — planned events act as reminders; overdue ones say confirmar */}
+      {pending.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <span className="ml-0.5 text-sm" style={{ color: COLORS.soft }}>
+            próximos
+          </span>
+          {pending.map((e) => {
+            const overdue = e.date < todayKey;
+            return (
+              <div
+                key={e.id}
+                className="flex items-center gap-3 rounded-[14px] px-[13px] py-[10px]"
+                style={{ background: COLORS.card, border: `1.5px solid ${COLORS.line}`, boxShadow: '0 2px 0 ' + COLORS.line }}
+              >
+                <button
+                  type="button"
+                  onClick={() => onEditEvento(e.id, e.date)}
+                  className="flex flex-1 items-center gap-3 border-none bg-transparent text-left"
+                  style={{ cursor: 'pointer', minHeight: 36 }}
+                >
+                  <Icon name={EVENT_META[e.type].icon} size={18} color={COLORS.accent} />
+                  <span className="flex flex-col">
+                    <span className="text-sm font-semibold" style={{ color: COLORS.ink }}>
+                      {e.note?.trim() ? e.note : EVENT_META[e.type].label}
+                    </span>
+                    <span className="text-[12.5px]" style={{ color: overdue ? COLORS.accent : COLORS.soft }}>
+                      {overdue ? 'confirmar · ' : ''}
+                      {formatLongPt(e.date)}
+                    </span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => markEventDone(e)}
+                  aria-label="marcar como feito"
+                  className="flex items-center justify-center rounded-[10px]"
+                  style={{
+                    minWidth: 44,
+                    minHeight: 44,
+                    border: `1.5px solid ${COLORS.line}`,
+                    background: COLORS.paper,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Icon name="check" size={18} color={COLORS.accent} strokeWidth={2.6} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* week strip */}
       <div>

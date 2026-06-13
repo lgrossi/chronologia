@@ -10,6 +10,7 @@
  */
 import type { CSSProperties } from 'react';
 import { useDay, useEventsInRange } from '@/data/hooks';
+import { repo } from '@/data/repo';
 import { COLORS, SEV } from '@/theme/tokens';
 import { capitalize, formatLongPt } from '@/lib/date';
 import { EVENT_META } from '@/lib/events';
@@ -88,30 +89,55 @@ export function DayDetail({
       {events.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 14 }}>
           {events.map((e) => (
-            <button
-              key={e.id}
-              onClick={() => {
-                onClose();
-                onEditEvento(e.id, dateKey);
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 11,
-                textAlign: 'left',
-                background: COLORS.accentSoft,
-                border: `1.5px solid ${COLORS.line}`,
-                borderRadius: 14,
-                padding: '12px 14px',
-                cursor: 'pointer',
-              }}
-            >
-              <Icon name={EVENT_META[e.type].icon} size={18} color={COLORS.accent} />
-              <span style={{ flex: 1, fontSize: 15, fontWeight: 600 }}>
-                {e.note?.trim() ? e.note : capitalize(EVENT_META[e.type].label)}
-              </span>
-              <Icon name="pencil" size={15} color={COLORS.faint} />
-            </button>
+            <div key={e.id} style={{ display: 'flex', alignItems: 'stretch', gap: 8 }}>
+              <button
+                onClick={() => {
+                  onClose();
+                  onEditEvento(e.id, dateKey);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 11,
+                  flex: 1,
+                  textAlign: 'left',
+                  background: COLORS.accentSoft,
+                  border: `1.5px solid ${COLORS.line}`,
+                  borderRadius: 14,
+                  padding: '12px 14px',
+                  cursor: 'pointer',
+                }}
+              >
+                <Icon name={EVENT_META[e.type].icon} size={18} color={COLORS.accent} />
+                <span style={{ flex: 1, fontSize: 15, fontWeight: 600 }}>
+                  {e.note?.trim() ? e.note : capitalize(EVENT_META[e.type].label)}
+                </span>
+                {e.done === false && (
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.accent }}>
+                    {e.date < dateKey ? 'confirmar' : 'planejado'}
+                  </span>
+                )}
+                <Icon name="pencil" size={15} color={COLORS.faint} />
+              </button>
+              {e.done === false && (
+                <button
+                  onClick={() => void repo.putEvent({ ...e, done: true })}
+                  aria-label="marcar como feito"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minWidth: 48,
+                    border: `1.5px solid ${COLORS.line}`,
+                    borderRadius: 14,
+                    background: COLORS.card,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Icon name="check" size={18} color={COLORS.accent} strokeWidth={2.6} />
+                </button>
+              )}
+            </div>
           ))}
         </div>
       )}

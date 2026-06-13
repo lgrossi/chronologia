@@ -3,6 +3,7 @@ import {
   cycleStatus,
   infusionMedication,
   isInfusionMed,
+  pendingEvents,
   weekStrip,
   monthRollup,
   topSymptoms,
@@ -57,6 +58,24 @@ describe('infusionMedication', () => {
       medicationId: 'd1',
     };
     expect(infusionMedication([dailyMed], dailyInfusion)).toBeNull();
+  });
+});
+
+describe('pendingEvents', () => {
+  it('returns only unconfirmed events (done === false), sorted by date', () => {
+    const ev = (id: string, date: string, done?: boolean): HealthEvent => ({
+      id,
+      date,
+      type: 'consulta',
+      done,
+    });
+    const list = [
+      ev('a', '2026-07-01', false),
+      ev('b', '2026-06-01', true),
+      ev('c', '2026-06-15', false),
+      ev('d', '2026-06-20', undefined),
+    ];
+    expect(pendingEvents(list).map((e) => e.id)).toEqual(['c', 'a']);
   });
 });
 

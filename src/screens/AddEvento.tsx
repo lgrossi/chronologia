@@ -16,7 +16,7 @@ import type { EventType } from '@/lib/types';
 import { COLORS } from '@/theme/tokens';
 import { Icon, type IconName } from '@/components/Icon';
 import { Btn } from '@/components/Btn';
-import { formatLongWithYearPt } from '@/lib/date';
+import { formatLongWithYearPt, localDayKey } from '@/lib/date';
 import { useMedications } from '@/data/hooks';
 import { isInfusionMed } from '@/lib/selectors';
 import { repo } from '@/data/repo';
@@ -99,6 +99,9 @@ export function AddEvento({ dateKey, eventId, onClose, onSaved }: AddEventoProps
   // An attachment already stored on the event being edited.
   const [existingAttachment, setExistingAttachment] = useState<Blob | null>(null);
   const [note, setNote] = useState('');
+  // Confirmation state, only meaningful in EDIT (a new event's done is derived
+  // from its date at save: future = planned/false, today-or-past = true).
+  const [done, setDone] = useState(true);
   // EDIT mode is not ready to save until the event finishes loading.
   const [loaded, setLoaded] = useState(!eventId);
 
@@ -116,6 +119,7 @@ export function AddEvento({ dateKey, eventId, onClose, onSaved }: AddEventoProps
       setRemind(event.remindNextDoseDays != null);
       setExistingAttachment(event.attachments?.[0] ?? null);
       setNote(event.note ?? '');
+      setDone(event.done ?? event.date <= localDayKey());
       setLoaded(true);
     });
     return () => {
@@ -180,6 +184,9 @@ export function AddEvento({ dateKey, eventId, onClose, onSaved }: AddEventoProps
       remindNextDoseDays: isInfusao && remind ? med?.intervalDays : undefined,
       attachments: attachment ? [attachment] : undefined,
       note: trimmed ? trimmed : undefined,
+      // New events confirm themselves by date; edits keep their state (confirm
+      // happens via "marcar feito" on Home / the day sheet).
+      done: isEdit ? done : chosenKey <= localDayKey(),
     });
     onSaved(type, isEdit ? 'updated' : 'created');
   }

@@ -36,6 +36,15 @@ export function infusionMedication(
   return med && isInfusionMed(med) ? med : null;
 }
 
+/**
+ * Events still awaiting confirmation (`done === false`) — i.e. reminders. Sorted
+ * by date ascending so the soonest/most-overdue is first. A pending event with a
+ * past date is overdue ("confirmar"); today-or-future is upcoming.
+ */
+export function pendingEvents(events: HealthEvent[]): HealthEvent[] {
+  return events.filter((e) => e.done === false).sort((a, b) => a.date.localeCompare(b.date));
+}
+
 export interface CycleStatus {
   dayN: number;
   total: number;

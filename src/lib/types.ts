@@ -44,6 +44,13 @@ export interface HealthEvent {
   remindNextDoseDays?: number;
   attachments?: Blob[];
   note?: string;
+  /**
+   * Confirmation state. A future-dated event is created with `done: false` — it
+   * acts as a reminder until confirmed. `done: false` once its date passes ⇒
+   * "confirmar". Past/today events are logged with `done: true` (already
+   * happened). Absent (legacy) is treated as done.
+   */
+  done?: boolean;
 }
 
 /**
