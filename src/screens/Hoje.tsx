@@ -56,6 +56,16 @@ export function Hoje({
   const profile = useProfile();
   const reminders = useReminders();
 
+  // Reminder strip summary across the (possibly multiple) reminders.
+  const enabledReminders = reminders.filter((r) => r.enabled);
+  const dayReminder = reminders.find((r) => r.kind === 'day');
+  const reminderText =
+    enabledReminders.length === 0
+      ? 'Lembretes desativados'
+      : enabledReminders.length === 1 && dayReminder?.enabled
+        ? `Lembrete diário às ${dayReminder.time}`
+        : `Lembretes · ${enabledReminders.length} ativos`;
+
   const today = useDay(todayKey);
   const yesterday = useDay(addDays(todayKey, -1));
 
@@ -288,7 +298,7 @@ export function Hoje({
         style={{ border: `1.5px dashed ${COLORS.line}`, color: COLORS.soft }}
       >
         <Icon name="bell" size={18} color={COLORS.soft} />
-        <span className="flex-1 text-sm">Lembrete diário às {reminders.dailyTime}</span>
+        <span className="flex-1 text-sm">{reminderText}</span>
         <span className="text-[13px] font-semibold" style={{ color: COLORS.accent }}>
           editar
         </span>

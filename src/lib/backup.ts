@@ -91,7 +91,7 @@ export function toBackup(parsed: unknown): Backup {
   if (!Array.isArray(events)) throw new Error('backup: events not an array');
   if (!Array.isArray(symptoms)) throw new Error('backup: symptoms not an array');
   if (!Array.isArray(medications)) throw new Error('backup: medications not an array');
-  if (!isObject(reminders)) throw new Error('backup: reminders not an object');
+  if (!Array.isArray(reminders)) throw new Error('backup: reminders not an array');
   if (!isObject(profile)) throw new Error('backup: profile not an object');
 
   const restoredEvents: HealthEvent[] = (events as HealthEvent[]).map((e) => {
@@ -114,7 +114,7 @@ export function toBackup(parsed: unknown): Backup {
     events: restoredEvents,
     symptoms: symptoms as Backup['symptoms'],
     medications: medications as Backup['medications'],
-    reminders: reminders as unknown as Backup['reminders'],
+    reminders: reminders as Backup['reminders'],
     profile: profile as unknown as Backup['profile'],
   };
 }

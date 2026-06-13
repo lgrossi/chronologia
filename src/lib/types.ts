@@ -46,6 +46,22 @@ export interface HealthEvent {
   note?: string;
 }
 
+/**
+ * A single reminder. `kind: 'day'` is the once-a-day "registrar o dia" nudge
+ * (suppressed once the day is logged); `kind: 'medication'` is a take-your-meds
+ * reminder that fires regardless, optionally linked to a Medication.
+ */
+export type ReminderKind = 'day' | 'medication';
+export interface Reminder {
+  id: string;
+  kind: ReminderKind;
+  label: string;
+  time: string; // HH:mm, device-local
+  enabled: boolean;
+  medicationId?: string;
+}
+
+/** Legacy single-reminder shape, kept only to migrate old stored data. */
 export interface ReminderSettings {
   dailyEnabled: boolean;
   dailyTime: string;
@@ -67,7 +83,7 @@ export interface Backup {
   events: HealthEvent[];
   symptoms: Symptom[];
   medications: Medication[];
-  reminders: ReminderSettings;
+  reminders: Reminder[];
   profile: Profile;
 }
 
@@ -84,8 +100,8 @@ export interface Repository {
   listMedications(): Promise<Medication[]>;
   putMedication(m: Medication): Promise<void>;
   deleteMedication(id: string): Promise<void>;
-  getReminders(): Promise<ReminderSettings>;
-  putReminders(r: ReminderSettings): Promise<void>;
+  getReminders(): Promise<Reminder[]>;
+  putReminders(r: Reminder[]): Promise<void>;
   getProfile(): Promise<Profile>;
   putProfile(p: Profile): Promise<void>;
   exportAll(): Promise<Backup>;

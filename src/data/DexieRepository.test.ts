@@ -14,7 +14,7 @@ import type {
   HealthEvent,
   Medication,
   Profile,
-  ReminderSettings,
+  Reminder,
   Symptom,
 } from '@/lib/types';
 import { db } from './db';
@@ -214,10 +214,21 @@ describe('Reminders and Profile singletons', () => {
     expect(await repo.getProfile()).toEqual(onboarded);
   });
 
-  it('round-trips custom reminders', async () => {
-    const reminders: ReminderSettings = { dailyEnabled: false, dailyTime: '07:30' };
+  it('round-trips a multi-reminder list', async () => {
+    const reminders: Reminder[] = [
+      { id: 'day-log', kind: 'day', label: 'Registrar o dia', time: '07:30', enabled: false },
+      { id: 'm1', kind: 'medication', label: 'Azatioprina', time: '09:00', enabled: true, medicationId: 'aza' },
+    ];
     await repo.putReminders(reminders);
     expect(await repo.getReminders()).toEqual(reminders);
+  });
+
+  it('migrates a legacy single-reminder shape to one day reminder', async () => {
+    await db.meta.put({ key: 'reminders', value: { dailyEnabled: true, dailyTime: '08:00' } });
+    const migrated = await repo.getReminders();
+    expect(migrated).toEqual([
+      { id: 'day-log', kind: 'day', label: 'Registrar o dia', time: '08:00', enabled: true },
+    ]);
   });
 
   it('round-trips a custom profile including optional email', async () => {
@@ -246,7 +257,10 @@ describe('exportAll / importAll identity', () => {
     await repo.putSymptom({ id: 'diarreia', name: 'diarreia', isPreset: true, archived: false });
     await repo.putSymptom({ id: 'enxaqueca', name: 'enxaqueca', isPreset: false, archived: true });
     await repo.putMedication({ id: 'infliximabe', name: 'Infliximabe', intervalDays: 56 });
-    await repo.putReminders({ dailyEnabled: false, dailyTime: '06:15' });
+    await repo.putReminders([
+      { id: 'day-log', kind: 'day', label: 'Registrar o dia', time: '06:15', enabled: false },
+      { id: 'm1', kind: 'medication', label: 'Azatioprina', time: '09:00', enabled: true },
+    ]);
     await repo.putProfile({ name: 'Ana', condition: 'Crohn', sinceYear: 2020, email: 'ana@x.com', onboarded: true });
 
     const first = await repo.exportAll();
@@ -275,7 +289,7 @@ describe('exportAll / importAll identity', () => {
       events: [makeEvent('fresh', '2026-06-01')],
       symptoms: [{ id: 'gases', name: 'gases', isPreset: true, archived: false }],
       medications: [{ id: 'infliximabe', name: 'Infliximabe', intervalDays: 56 }],
-      reminders: { dailyEnabled: true, dailyTime: '20:00' },
+      reminders: [{ id: 'day-log', kind: 'day', label: 'Registrar o dia', time: '20:00', enabled: true }],
       profile: { name: 'Ana', condition: 'Crohn', sinceYear: 2021, onboarded: true },
     };
 

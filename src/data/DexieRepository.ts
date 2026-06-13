@@ -14,16 +14,42 @@ import type {
   HealthEvent,
   Medication,
   Profile,
+  Reminder,
   ReminderSettings,
   Repository,
   Symptom,
 } from '@/lib/types';
 import { ChronologiaDB, META_KEYS, db as sharedDb } from './db';
 
-export const DEFAULT_REMINDERS: ReminderSettings = {
-  dailyEnabled: true,
-  dailyTime: '21:00',
-};
+/** The id of the canonical once-a-day "registrar o dia" reminder (singleton). */
+export const DAY_REMINDER_ID = 'day-log';
+
+export const DEFAULT_REMINDERS: Reminder[] = [
+  { id: DAY_REMINDER_ID, kind: 'day', label: 'Registrar o dia', time: '21:00', enabled: true },
+];
+
+/**
+ * Coerce whatever is stored under the reminders key into a Reminder[]. Handles:
+ * a current array (returned as-is), the legacy single {dailyEnabled,dailyTime}
+ * shape (migrated to one day reminder), and anything else (defaults). Pure so
+ * the repo and the live hook share one migration path.
+ */
+export function normalizeReminders(value: unknown): Reminder[] {
+  if (Array.isArray(value)) return value as Reminder[];
+  if (value && typeof value === 'object' && 'dailyTime' in value) {
+    const legacy = value as ReminderSettings;
+    return [
+      {
+        id: DAY_REMINDER_ID,
+        kind: 'day',
+        label: 'Registrar o dia',
+        time: legacy.dailyTime,
+        enabled: legacy.dailyEnabled,
+      },
+    ];
+  }
+  return DEFAULT_REMINDERS;
+}
 
 /**
  * The default profile returned before onboarding: empty and not yet onboarded,
@@ -96,12 +122,12 @@ export class DexieRepository implements Repository {
     await this.db.medications.delete(id);
   }
 
-  async getReminders(): Promise<ReminderSettings> {
+  async getReminders(): Promise<Reminder[]> {
     const row = await this.db.meta.get(META_KEYS.reminders);
-    return (row?.value as ReminderSettings | undefined) ?? DEFAULT_REMINDERS;
+    return normalizeReminders(row?.value);
   }
 
-  async putReminders(r: ReminderSettings): Promise<void> {
+  async putReminders(r: Reminder[]): Promise<void> {
     await this.db.meta.put({ key: META_KEYS.reminders, value: r });
   }
 

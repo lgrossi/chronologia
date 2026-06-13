@@ -17,11 +17,11 @@ import type {
   HealthEvent,
   Medication,
   Profile,
-  ReminderSettings,
+  Reminder,
   Symptom,
 } from '@/lib/types';
 import { META_KEYS, db } from './db';
-import { DEFAULT_PROFILE, DEFAULT_REMINDERS } from './DexieRepository';
+import { DEFAULT_PROFILE, DEFAULT_REMINDERS, normalizeReminders } from './DexieRepository';
 
 /** Live DayLog for one date, or null when nothing is logged. */
 export function useDay(date: string): DayLog | null | undefined {
@@ -67,12 +67,12 @@ export function useMedications(): Medication[] {
   return useLiveQuery(() => db.medications.toArray(), []) ?? [];
 }
 
-/** Live reminder settings, falling back to defaults. */
-export function useReminders(): ReminderSettings {
+/** Live list of reminders (migrated from any legacy shape), defaults if none. */
+export function useReminders(): Reminder[] {
   return (
     useLiveQuery(async () => {
       const row = await db.meta.get(META_KEYS.reminders);
-      return (row?.value as ReminderSettings | undefined) ?? DEFAULT_REMINDERS;
+      return normalizeReminders(row?.value);
     }, []) ?? DEFAULT_REMINDERS
   );
 }

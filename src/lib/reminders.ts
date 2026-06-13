@@ -37,7 +37,7 @@
  * Dependency-free. No throws on unsupported APIs — every platform call is
  * guarded so this is safe to import and call anywhere, including SSR/build.
  */
-import type { Medication, ReminderSettings } from './types';
+import type { Medication, Reminder } from './types';
 import { daysBetween, localDayKey } from './date';
 
 const REMINDER_EVENT = 'chronologia:reminder';
@@ -103,30 +103,35 @@ function nowMinutes(now: Date): number {
 }
 
 /**
- * Whether a daily nudge is due right now: enabled, a valid time, and the local
- * clock is at/after that time. Exported for unit testing the time logic without
- * touching platform APIs.
+ * Whether a reminder is due right now: enabled, a valid time, and the local
+ * clock is at/after that time. Exported for unit testing without platform APIs.
  */
-export function isDailyDue(settings: ReminderSettings, now: Date = new Date()): boolean {
-  if (!settings.dailyEnabled) return false;
-  const due = parseTimeToMinutes(settings.dailyTime);
+export function isReminderDue(r: Reminder, now: Date = new Date()): boolean {
+  if (!r.enabled) return false;
+  const due = parseTimeToMinutes(r.time);
   if (due === null) return false;
   return nowMinutes(now) >= due;
 }
 
-// In-memory guard so a given day nudges at most once per running session.
-let lastNudgedDay: string | null = null;
+/** pt-BR nudge text for a reminder. */
+function nudgeText(r: Reminder, opts: InitReminderOptions): string {
+  if (r.kind === 'day') return opts.dailyText ?? DEFAULT_DAILY_TEXT;
+  return `Hora de tomar ${r.label.trim() || 'o medicamento'}.`;
+}
+
+// Per-reminder guard so each reminder nudges at most once per local day.
+const lastNudged = new Map<string, string>();
 // The currently-attached foreground listener, so re-init can detach it.
 let foregroundHandler: (() => void) | null = null;
 
-function emitNudge(text: string, dayKey: string): void {
+function emitNudge(reminderId: string, text: string, dayKey: string): void {
   if (!hasWindow()) return;
-  if (lastNudgedDay === dayKey) return;
-  lastNudgedDay = dayKey;
+  if (lastNudged.get(reminderId) === dayKey) return;
+  lastNudged.set(reminderId, dayKey);
 
   if (isNotificationGranted()) {
     try {
-      new Notification('Chronologia', { body: text, tag: `daily-${dayKey}` });
+      new Notification('Chronologia', { body: text, tag: `${reminderId}-${dayKey}` });
     } catch {
       // Constructing Notification can throw on some mobile browsers that only
       // allow ServiceWorkerRegistration.showNotification — fall through to the
@@ -139,10 +144,15 @@ function emitNudge(text: string, dayKey: string): void {
   );
 }
 
-function maybeNudge(settings: ReminderSettings, opts: InitReminderOptions): void {
-  if (!isDailyDue(settings)) return;
-  if (opts.isTodayLogged?.() === true) return;
-  emitNudge(opts.dailyText ?? DEFAULT_DAILY_TEXT, localDayKey());
+function maybeNudgeAll(reminders: Reminder[], opts: InitReminderOptions): void {
+  const dayKey = localDayKey();
+  for (const r of reminders) {
+    if (!isReminderDue(r)) continue;
+    // The day-log nudge is suppressed once today is logged; med reminders fire
+    // regardless (taking a pill is independent of logging the day).
+    if (r.kind === 'day' && opts.isTodayLogged?.() === true) continue;
+    emitNudge(r.id, nudgeText(r, opts), dayKey);
+  }
 }
 
 /**
@@ -178,7 +188,7 @@ function tryRegisterPeriodicSync(): void {
  * (`visibilitychange` → visible), and (c) attempts a periodic background sync
  * registration as a bonus wakeup path. When disabled it tears the listener down.
  */
-export function initReminders(settings: ReminderSettings, opts: InitReminderOptions = {}): void {
+export function initReminders(reminders: Reminder[], opts: InitReminderOptions = {}): void {
   if (!hasWindow()) return;
 
   if (foregroundHandler) {
@@ -186,14 +196,14 @@ export function initReminders(settings: ReminderSettings, opts: InitReminderOpti
     foregroundHandler = null;
   }
 
-  if (!settings.dailyEnabled) return;
+  if (!reminders.some((r) => r.enabled)) return;
 
   foregroundHandler = () => {
-    if (document.visibilityState === 'visible') maybeNudge(settings, opts);
+    if (document.visibilityState === 'visible') maybeNudgeAll(reminders, opts);
   };
   document.addEventListener('visibilitychange', foregroundHandler);
 
-  maybeNudge(settings, opts);
+  maybeNudgeAll(reminders, opts);
   tryRegisterPeriodicSync();
 }
 

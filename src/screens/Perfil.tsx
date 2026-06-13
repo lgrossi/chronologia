@@ -4,7 +4,7 @@
  * store. Each setting row opens a BottomSheet editor; Backup is the v1
  * durability story (export → JSON download, import → JSON file → repo.importAll).
  */
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
   useEventsInRange,
   useMedications,
@@ -13,7 +13,7 @@ import {
   useSymptoms,
 } from '@/data/hooks';
 import { repo } from '@/data/repo';
-import type { HealthEvent, Medication, Profile, Symptom } from '@/lib/types';
+import type { HealthEvent, Medication, Profile, Reminder, Symptom } from '@/lib/types';
 import { toBackup, toBackupFile } from '@/lib/backup';
 import { localDayKey, formatLongPt } from '@/lib/date';
 import { COLORS } from '@/theme/tokens';
@@ -66,7 +66,10 @@ export function Perfil() {
       key: 'reminders',
       icon: 'bell',
       title: 'Lembretes',
-      sub: reminders.dailyEnabled ? `Diário às ${reminders.dailyTime}` : 'desativado',
+      sub: (() => {
+        const n = reminders.filter((r) => r.enabled).length;
+        return n ? `${n} ativo${n > 1 ? 's' : ''}` : 'desativado';
+      })(),
     },
     {
       key: 'symptoms',
@@ -161,7 +164,7 @@ export function Perfil() {
         <MedsEditor meds={meds} />
       </BottomSheet>
       <BottomSheet open={sheet === 'reminders'} onClose={close}>
-        <RemindersEditor reminders={reminders} onClose={close} />
+        <RemindersEditor reminders={reminders} medications={meds} onClose={close} />
       </BottomSheet>
       <BottomSheet open={sheet === 'symptoms'} onClose={close}>
         <SymptomsEditor symptoms={symptoms} />
@@ -486,82 +489,207 @@ function MedsEditor({ meds }: { meds: Medication[] }) {
 
 /* ------------------------------ reminders ------------------------------- */
 
+/** An on-brand toggle switch with a leading label. */
+function Switch({ on, onToggle, label }: { on: boolean; onToggle: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={on}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+        width: '100%',
+        background: 'none',
+        border: 'none',
+        padding: 0,
+        cursor: 'pointer',
+      }}
+    >
+      <span style={{ fontSize: 15.5, color: COLORS.ink, textAlign: 'left' }}>{label}</span>
+      <span
+        style={{
+          width: 46,
+          height: 28,
+          borderRadius: 999,
+          background: on ? COLORS.accent : COLORS.line,
+          display: 'flex',
+          alignItems: 'center',
+          padding: 3,
+          transition: 'background .15s',
+          flexShrink: 0,
+        }}
+      >
+        <span
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: '50%',
+            background: COLORS.onAccent,
+            transform: on ? 'translateX(18px)' : 'none',
+            transition: 'transform .15s',
+          }}
+        />
+      </span>
+    </button>
+  );
+}
+
+/**
+ * Multiple reminders: one day-log nudge plus any number of medicine reminders.
+ * Every change autosaves the whole list (no save button). Quick-add chips create
+ * a reminder for a medicine in one tap; "adicionar lembrete" adds a blank one.
+ */
 function RemindersEditor({
   reminders,
+  medications,
   onClose,
 }: {
-  reminders: { dailyEnabled: boolean; dailyTime: string };
+  reminders: Reminder[];
+  medications: Medication[];
   onClose: () => void;
 }) {
-  const [enabled, setEnabled] = useState(reminders.dailyEnabled);
-  const [time, setTime] = useState(reminders.dailyTime);
+  const [labelDrafts, setLabelDrafts] = useState<Record<string, string>>({});
 
-  const save = async () => {
-    await repo.putReminders({ dailyEnabled: enabled, dailyTime: time });
-    onClose();
+  const persist = (next: Reminder[]) => repo.putReminders(next);
+  const update = (id: string, patch: Partial<Reminder>) =>
+    persist(reminders.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  const remove = (id: string) => persist(reminders.filter((r) => r.id !== id));
+  const addBlank = () =>
+    persist([
+      ...reminders,
+      { id: crypto.randomUUID(), kind: 'medication', label: '', time: '09:00', enabled: true },
+    ]);
+  const addForMed = (m: Medication) =>
+    persist([
+      ...reminders,
+      {
+        id: crypto.randomUUID(),
+        kind: 'medication',
+        label: m.name,
+        time: '09:00',
+        enabled: true,
+        medicationId: m.id,
+      },
+    ]);
+
+  const dayReminders = reminders.filter((r) => r.kind === 'day');
+  const medReminders = reminders.filter((r) => r.kind === 'medication');
+  const remindedMedIds = new Set(medReminders.map((r) => r.medicationId).filter(Boolean));
+  const quickAdd = medications.filter((m) => m.name.trim() && !remindedMedIds.has(m.id));
+
+  const card: CSSProperties = {
+    background: COLORS.card,
+    border: `1.5px solid ${COLORS.line}`,
+    borderRadius: 14,
+    padding: '12px 14px',
   };
 
   return (
     <div>
       <SheetTitle>Lembretes</SheetTitle>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <button
-          type="button"
-          onClick={() => setEnabled((v) => !v)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-            background: COLORS.card,
-            border: `1.5px solid ${COLORS.line}`,
-            borderRadius: 14,
-            padding: '12px 14px',
-            minHeight: 44,
-            cursor: 'pointer',
-          }}
-        >
-          <span style={{ fontSize: 15.5, color: COLORS.ink }}>Lembrete diário</span>
-          <span
-            style={{
-              width: 46,
-              height: 28,
-              borderRadius: 999,
-              background: enabled ? COLORS.accent : COLORS.line,
-              display: 'flex',
-              alignItems: 'center',
-              padding: 3,
-              transition: 'background .15s',
-            }}
-          >
-            <span
-              style={{
-                width: 22,
-                height: 22,
-                borderRadius: '50%',
-                background: COLORS.onAccent,
-                transform: enabled ? 'translateX(18px)' : 'none',
-                transition: 'transform .15s',
-              }}
-            />
-          </span>
-        </button>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {dayReminders.map((r) => (
+          <div key={r.id} style={{ ...card, display: 'flex', flexDirection: 'column', gap: r.enabled ? 12 : 0 }}>
+            <Switch on={r.enabled} onToggle={() => update(r.id, { enabled: !r.enabled })} label="Registrar o dia" />
+            {r.enabled && (
+              <div>
+                <FieldLabel>Horário</FieldLabel>
+                <input
+                  type="time"
+                  style={inputStyle}
+                  value={r.time}
+                  onChange={(e) => update(r.id, { time: e.target.value })}
+                />
+              </div>
+            )}
+          </div>
+        ))}
 
-        {enabled && (
-          <div>
-            <FieldLabel>Horário</FieldLabel>
-            <input
-              type="time"
-              style={inputStyle}
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
-            />
+        {medReminders.map((r) => {
+          const draft = labelDrafts[r.id] ?? r.label;
+          return (
+            <div key={r.id} style={{ ...card, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <Switch
+                on={r.enabled}
+                onToggle={() => update(r.id, { enabled: !r.enabled })}
+                label={r.label.trim() || 'Medicamento'}
+              />
+              <input
+                style={inputStyle}
+                placeholder="ex.: Azatioprina"
+                value={draft}
+                onChange={(e) => setLabelDrafts((p) => ({ ...p, [r.id]: e.target.value }))}
+                onBlur={() => update(r.id, { label: draft.trim() })}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <input
+                  type="time"
+                  style={{ ...inputStyle, width: 150 }}
+                  value={r.time}
+                  onChange={(e) => update(r.id, { time: e.target.value })}
+                />
+                <TextAction danger onClick={() => remove(r.id)}>
+                  remover
+                </TextAction>
+              </div>
+            </div>
+          );
+        })}
+
+        {quickAdd.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {quickAdd.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => addForMed(m)}
+                style={{
+                  minHeight: 40,
+                  padding: '0 14px',
+                  borderRadius: 13,
+                  border: `1.5px solid ${COLORS.line}`,
+                  background: COLORS.card,
+                  color: COLORS.ink,
+                  fontFamily: 'Hanken Grotesk, sans-serif',
+                  fontSize: 13.5,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                + {m.name}
+              </button>
+            ))}
           </div>
         )}
 
-        <Btn primary onClick={save}>
+        <button
+          type="button"
+          onClick={addBlank}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            width: '100%',
+            minHeight: 44,
+            background: 'none',
+            border: `1.5px dashed ${COLORS.line}`,
+            borderRadius: 14,
+            color: COLORS.accent,
+            fontSize: 15,
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          <Icon name="plus" size={18} color={COLORS.accent} /> adicionar lembrete
+        </button>
+
+        <Btn primary onClick={onClose}>
           <Icon name="check" size={18} color={COLORS.onAccent} />
-          guardar
+          concluir
         </Btn>
       </div>
     </div>

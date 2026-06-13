@@ -18,7 +18,7 @@ import { repo } from '@/data/repo';
 import { seedIfEmpty } from '@/data/seed';
 import { initReminders } from '@/lib/reminders';
 import { localDayKey } from '@/lib/date';
-import type { ReminderSettings } from '@/lib/types';
+import type { Reminder } from '@/lib/types';
 
 async function bootstrap(): Promise<void> {
   await seedIfEmpty();
@@ -39,8 +39,8 @@ async function bootstrap(): Promise<void> {
 
   // initReminders is idempotent and best-effort; re-arming detaches the prior
   // listener first, so re-running it on every settings change is safe.
-  const arm = (settings: ReminderSettings) =>
-    initReminders(settings, { isTodayLogged: () => loggedCache });
+  const arm = (reminders: Reminder[]) =>
+    initReminders(reminders, { isTodayLogged: () => loggedCache });
 
   arm(await repo.getReminders());
 

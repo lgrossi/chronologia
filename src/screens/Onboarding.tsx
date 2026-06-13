@@ -203,7 +203,15 @@ export function Onboarding({ onDone }: OnboardingProps) {
       // Persisting reminder settings re-arms the foreground nudge via main.tsx's
       // liveQuery subscription (with the correct isTodayLogged hook). We only
       // request OS permission here so the prompt stays tied to enabling it.
-      await repo.putReminders({ dailyEnabled: reminderOn, dailyTime: reminderTime });
+      await repo.putReminders([
+        {
+          id: 'day-log',
+          kind: 'day',
+          label: 'Registrar o dia',
+          time: reminderTime,
+          enabled: reminderOn,
+        },
+      ]);
 
       if (reminderOn) {
         // Best-effort: a denied prompt still leaves the in-app nudge working.

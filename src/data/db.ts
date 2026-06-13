@@ -11,14 +11,16 @@ import type {
   HealthEvent,
   Medication,
   Profile,
+  Reminder,
   ReminderSettings,
   Symptom,
 } from '@/lib/types';
 
-/** A row in the `meta` key/value table. */
+/** A row in the `meta` key/value table. ReminderSettings is the legacy reminder
+ * shape, kept so old rows still type-check until migrated on read. */
 export interface MetaRow {
   key: string;
-  value: ReminderSettings | Profile;
+  value: Reminder[] | ReminderSettings | Profile;
 }
 
 export const META_KEYS = {
