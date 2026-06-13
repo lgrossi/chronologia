@@ -16,6 +16,7 @@ import { repo } from '@/data/repo';
 import type { HealthEvent, Medication, Profile, Reminder, Symptom } from '@/lib/types';
 import { toBackup, toBackupFile } from '@/lib/backup';
 import { localDayKey, formatLongPt } from '@/lib/date';
+import { isInfusionMed } from '@/lib/selectors';
 import { COLORS } from '@/theme/tokens';
 import { Icon, type IconName } from '@/components/Icon';
 import { Card } from '@/components/Card';
@@ -578,7 +579,11 @@ function RemindersEditor({
   const dayReminders = reminders.filter((r) => r.kind === 'day');
   const medReminders = reminders.filter((r) => r.kind === 'custom');
   const remindedMedIds = new Set(medReminders.map((r) => r.medicationId).filter(Boolean));
-  const quickAdd = medications.filter((m) => m.name.trim() && !remindedMedIds.has(m.id));
+  // Only suggest DAILY/maintenance meds for reminders — infusions are tracked
+  // by the cycle and future events, not by a daily nudge.
+  const quickAdd = medications.filter(
+    (m) => m.name.trim() && !isInfusionMed(m) && !remindedMedIds.has(m.id),
+  );
 
   const card: CSSProperties = {
     background: COLORS.card,

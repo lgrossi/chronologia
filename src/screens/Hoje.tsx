@@ -28,11 +28,11 @@ import {
   localDayKey,
   weekKeysMonday,
 } from '@/lib/date';
-import { cycleStatus, infusionMedication, pendingEvents, weekStrip } from '@/lib/selectors';
+import { cycleStatus, infusionMedication, isInfusionMed, pendingEvents, weekStrip } from '@/lib/selectors';
 import { isReminderDue } from '@/lib/reminders';
 import { EVENT_META } from '@/lib/events';
 import { repo } from '@/data/repo';
-import type { DayLog, HealthEvent, Mood } from '@/lib/types';
+import type { DayLog, EventPrefill, HealthEvent, Mood, Reminder } from '@/lib/types';
 
 /** Display word for a mood (the recap bolds it as the day's character). */
 const MOOD_WORD: Record<Mood, string> = { bom: 'bom', neutro: 'neutro', ruim: 'ruim' };
@@ -55,12 +55,14 @@ export function Hoje({
   onEditDay,
   onAddEvento,
   onEditEvento,
+  onLogReminder,
 }: {
   onRegistrar: () => void;
   onOpenLinha: () => void;
   onEditDay: (dateKey: string) => void;
   onAddEvento: (dateKey: string) => void;
   onEditEvento: (eventId: string, dateKey: string) => void;
+  onLogReminder: (prefill: EventPrefill) => void;
 }) {
   const todayKey = localDayKey();
   // A tapped week-strip day opens the same chooser sheet as the calendar.
@@ -96,6 +98,16 @@ export function Hoje({
   const pending = pendingEvents(eventWindow);
   const markEventDone = (e: HealthEvent) => {
     void repo.putEvent({ ...e, done: true });
+  };
+
+  // Turn a daily reminder into an event for today: a medicine reminder opens a
+  // pre-filled infusão/remédio; a generic one opens "outro" with the label.
+  const logFromReminder = (r: Reminder) => {
+    const med = r.medicationId ? meds.find((m) => m.id === r.medicationId) : undefined;
+    const prefill: EventPrefill = med
+      ? { type: isInfusionMed(med) ? 'infusao' : 'remedio', medicationId: med.id }
+      : { type: 'outro', note: r.label.trim() || undefined };
+    onLogReminder(prefill);
   };
 
   const logged = today ?? null;
@@ -398,19 +410,28 @@ export function Hoje({
               );
             }
 
-            // Custom daily reminder: generic per-day check-off (resets at midnight).
+            // Custom daily reminder: tap the label to log it as an event, or the
+            // check to tick it off for today (generic; resets at midnight).
             return (
               <div key={r.id} className={cls} style={style}>
-                <Icon name="bell" size={18} color={due ? COLORS.accent : COLORS.soft} />
-                <span
-                  className="flex-1 text-sm"
-                  style={{
-                    color: done ? COLORS.faint : due ? COLORS.ink : COLORS.soft,
-                    textDecoration: done ? 'line-through' : 'none',
-                  }}
+                <button
+                  type="button"
+                  onClick={() => logFromReminder(r)}
+                  aria-label={`registrar evento de ${label}`}
+                  className="flex flex-1 items-center gap-3 border-none bg-transparent text-left"
+                  style={{ cursor: 'pointer', minHeight: 36 }}
                 >
-                  {label}
-                </span>
+                  <Icon name="bell" size={18} color={due ? COLORS.accent : COLORS.soft} />
+                  <span
+                    className="flex-1 text-sm"
+                    style={{
+                      color: done ? COLORS.faint : due ? COLORS.ink : COLORS.soft,
+                      textDecoration: done ? 'line-through' : 'none',
+                    }}
+                  >
+                    {label}
+                  </span>
+                </button>
                 <span
                   className="text-[13px] font-semibold"
                   style={{ color: due && !done ? COLORS.accent : COLORS.faint }}

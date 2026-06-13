@@ -12,7 +12,7 @@
  * and fire the matching confirmation toast.
  */
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import type { EventType } from '@/lib/types';
+import type { EventPrefill, EventType } from '@/lib/types';
 import { COLORS } from '@/theme/tokens';
 import { Icon, type IconName } from '@/components/Icon';
 import { Btn } from '@/components/Btn';
@@ -28,6 +28,8 @@ export interface AddEventoProps {
   eventId?: string;
   /** Dismiss without saving. */
   onClose: () => void;
+  /** Seed values for a NEW event (e.g. opened from a reminder). Ignored in edit. */
+  prefill?: EventPrefill;
   /** Saved/removed; parent closes the overlay and shows the matching toast. */
   onSaved: (type: EventType, mode: 'created' | 'updated' | 'deleted') => void;
 }
@@ -85,20 +87,20 @@ const sectionTitle: CSSProperties = {
   marginBottom: 10,
 };
 
-export function AddEvento({ dateKey, eventId, onClose, onSaved }: AddEventoProps) {
+export function AddEvento({ dateKey, eventId, prefill, onClose, onSaved }: AddEventoProps) {
   const medications = useMedications();
-  const [medId, setMedId] = useState<string | undefined>(undefined);
+  const [medId, setMedId] = useState<string | undefined>(prefill?.medicationId);
 
   const isEdit = Boolean(eventId);
 
-  const [type, setType] = useState<EventType>('infusao');
+  const [type, setType] = useState<EventType>(prefill?.type ?? 'infusao');
   const [chosenKey, setChosenKey] = useState(dateKey);
   const [remind, setRemind] = useState(true);
   // A freshly picked image (CREATE, or replacing in EDIT).
   const [file, setFile] = useState<File | null>(null);
   // An attachment already stored on the event being edited.
   const [existingAttachment, setExistingAttachment] = useState<Blob | null>(null);
-  const [note, setNote] = useState('');
+  const [note, setNote] = useState(prefill?.note ?? '');
   // Confirmation state, only meaningful in EDIT (a new event's done is derived
   // from its date at save: future = planned/false, today-or-past = true).
   const [done, setDone] = useState(true);
