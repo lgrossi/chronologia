@@ -217,7 +217,7 @@ describe('Reminders and Profile singletons', () => {
   it('round-trips a multi-reminder list', async () => {
     const reminders: Reminder[] = [
       { id: 'day-log', kind: 'day', label: 'Registrar o dia', time: '07:30', enabled: false },
-      { id: 'm1', kind: 'medication', label: 'Azatioprina', time: '09:00', enabled: true, medicationId: 'aza' },
+      { id: 'm1', kind: 'custom', label: 'Azatioprina', time: '09:00', enabled: true, medicationId: 'aza' },
     ];
     await repo.putReminders(reminders);
     expect(await repo.getReminders()).toEqual(reminders);
@@ -229,6 +229,15 @@ describe('Reminders and Profile singletons', () => {
     expect(migrated).toEqual([
       { id: 'day-log', kind: 'day', label: 'Registrar o dia', time: '08:00', enabled: true },
     ]);
+  });
+
+  it('records and clears per-day reminder check-offs', async () => {
+    await repo.setReminderDone('2026-06-10', 'm1', true);
+    await repo.setReminderDone('2026-06-10', 'm2', true);
+    expect((await repo.getDoneReminderIds('2026-06-10')).sort()).toEqual(['m1', 'm2']);
+    expect(await repo.getDoneReminderIds('2026-06-11')).toEqual([]);
+    await repo.setReminderDone('2026-06-10', 'm1', false);
+    expect(await repo.getDoneReminderIds('2026-06-10')).toEqual(['m2']);
   });
 
   it('round-trips a custom profile including optional email', async () => {
@@ -259,8 +268,9 @@ describe('exportAll / importAll identity', () => {
     await repo.putMedication({ id: 'infliximabe', name: 'Infliximabe', intervalDays: 56 });
     await repo.putReminders([
       { id: 'day-log', kind: 'day', label: 'Registrar o dia', time: '06:15', enabled: false },
-      { id: 'm1', kind: 'medication', label: 'Azatioprina', time: '09:00', enabled: true },
+      { id: 'm1', kind: 'custom', label: 'Azatioprina', time: '09:00', enabled: true },
     ]);
+    await repo.setReminderDone('2026-01-01', 'm1', true);
     await repo.putProfile({ name: 'Ana', condition: 'Crohn', sinceYear: 2020, email: 'ana@x.com', onboarded: true });
 
     const first = await repo.exportAll();
@@ -290,6 +300,7 @@ describe('exportAll / importAll identity', () => {
       symptoms: [{ id: 'gases', name: 'gases', isPreset: true, archived: false }],
       medications: [{ id: 'infliximabe', name: 'Infliximabe', intervalDays: 56 }],
       reminders: [{ id: 'day-log', kind: 'day', label: 'Registrar o dia', time: '20:00', enabled: true }],
+      reminderLog: [],
       profile: { name: 'Ana', condition: 'Crohn', sinceYear: 2021, onboarded: true },
     };
 

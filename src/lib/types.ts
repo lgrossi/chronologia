@@ -55,10 +55,11 @@ export interface HealthEvent {
 
 /**
  * A single reminder. `kind: 'day'` is the once-a-day "registrar o dia" nudge
- * (suppressed once the day is logged); `kind: 'medication'` is a take-your-meds
- * reminder that fires regardless, optionally linked to a Medication.
+ * (suppressed once the day is logged); `kind: 'custom'` is any other daily
+ * reminder — a medicine, water, a stretch, anything — checked off per day,
+ * optionally linked to a Medication.
  */
-export type ReminderKind = 'day' | 'medication';
+export type ReminderKind = 'day' | 'custom';
 export interface Reminder {
   id: string;
   kind: ReminderKind;
@@ -66,6 +67,13 @@ export interface Reminder {
   time: string; // HH:mm, device-local
   enabled: boolean;
   medicationId?: string;
+}
+
+/** One per-day check-off: reminder `reminderId` was marked done on `date`. */
+export interface ReminderLogEntry {
+  id: string; // `${date}|${reminderId}`
+  date: string; // yyyy-mm-dd, device-local
+  reminderId: string;
 }
 
 /** Legacy single-reminder shape, kept only to migrate old stored data. */
@@ -91,6 +99,7 @@ export interface Backup {
   symptoms: Symptom[];
   medications: Medication[];
   reminders: Reminder[];
+  reminderLog: ReminderLogEntry[];
   profile: Profile;
 }
 
@@ -109,6 +118,8 @@ export interface Repository {
   deleteMedication(id: string): Promise<void>;
   getReminders(): Promise<Reminder[]>;
   putReminders(r: Reminder[]): Promise<void>;
+  getDoneReminderIds(date: string): Promise<string[]>;
+  setReminderDone(date: string, reminderId: string, done: boolean): Promise<void>;
   getProfile(): Promise<Profile>;
   putProfile(p: Profile): Promise<void>;
   exportAll(): Promise<Backup>;

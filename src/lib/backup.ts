@@ -85,7 +85,7 @@ function isObject(v: unknown): v is Record<string, unknown> {
  */
 export function toBackup(parsed: unknown): Backup {
   if (!isObject(parsed)) throw new Error('backup: not an object');
-  const { version, days, events, symptoms, medications, reminders, profile } = parsed;
+  const { version, days, events, symptoms, medications, reminders, reminderLog, profile } = parsed;
   if (typeof version !== 'number') throw new Error('backup: missing version');
   if (!Array.isArray(days)) throw new Error('backup: days not an array');
   if (!Array.isArray(events)) throw new Error('backup: events not an array');
@@ -115,6 +115,8 @@ export function toBackup(parsed: unknown): Backup {
     symptoms: symptoms as Backup['symptoms'],
     medications: medications as Backup['medications'],
     reminders: reminders as Backup['reminders'],
+    // reminderLog is additive (v2); tolerate older backups that lack it.
+    reminderLog: Array.isArray(reminderLog) ? (reminderLog as Backup['reminderLog']) : [],
     profile: profile as unknown as Backup['profile'],
   };
 }

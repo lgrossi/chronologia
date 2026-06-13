@@ -77,6 +77,16 @@ export function useReminders(): Reminder[] {
   );
 }
 
+/** Live ids of reminders checked off on `date` (the per-day adherence log). */
+export function useDoneReminderIds(date: string): string[] {
+  return (
+    useLiveQuery(async () => {
+      const rows = await db.reminderLog.where('date').equals(date).toArray();
+      return rows.map((r) => r.reminderId);
+    }, [date]) ?? []
+  );
+}
+
 /** Live local profile, falling back to defaults. */
 export function useProfile(): Profile {
   return (

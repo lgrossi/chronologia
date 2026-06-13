@@ -35,7 +35,12 @@ export const DEFAULT_REMINDERS: Reminder[] = [
  * the repo and the live hook share one migration path.
  */
 export function normalizeReminders(value: unknown): Reminder[] {
-  if (Array.isArray(value)) return value as Reminder[];
+  if (Array.isArray(value)) {
+    // Migrate the short-lived 'medication' kind to the generic 'custom'.
+    return (value as Reminder[]).map((r) =>
+      (r.kind as string) === 'medication' ? { ...r, kind: 'custom' } : r,
+    );
+  }
   if (value && typeof value === 'object' && 'dailyTime' in value) {
     const legacy = value as ReminderSettings;
     return [
@@ -131,6 +136,17 @@ export class DexieRepository implements Repository {
     await this.db.meta.put({ key: META_KEYS.reminders, value: r });
   }
 
+  async getDoneReminderIds(date: string): Promise<string[]> {
+    const rows = await this.db.reminderLog.where('date').equals(date).toArray();
+    return rows.map((r) => r.reminderId);
+  }
+
+  async setReminderDone(date: string, reminderId: string, done: boolean): Promise<void> {
+    const id = `${date}|${reminderId}`;
+    if (done) await this.db.reminderLog.put({ id, date, reminderId });
+    else await this.db.reminderLog.delete(id);
+  }
+
   async getProfile(): Promise<Profile> {
     const row = await this.db.meta.get(META_KEYS.profile);
     return (row?.value as Profile | undefined) ?? DEFAULT_PROFILE;
@@ -141,12 +157,13 @@ export class DexieRepository implements Repository {
   }
 
   async exportAll(): Promise<Backup> {
-    const [days, events, symptoms, medications, reminders, profile] = await Promise.all([
+    const [days, events, symptoms, medications, reminders, reminderLog, profile] = await Promise.all([
       this.db.days.toArray(),
       this.db.events.toArray(),
       this.db.symptoms.toArray(),
       this.db.medications.toArray(),
       this.getReminders(),
+      this.db.reminderLog.toArray(),
       this.getProfile(),
     ]);
     return {
@@ -157,6 +174,7 @@ export class DexieRepository implements Repository {
       symptoms,
       medications,
       reminders,
+      reminderLog,
       profile,
     };
   }
@@ -164,7 +182,7 @@ export class DexieRepository implements Repository {
   async importAll(b: Backup): Promise<void> {
     await this.db.transaction(
       'rw',
-      [this.db.days, this.db.events, this.db.symptoms, this.db.medications, this.db.meta],
+      [this.db.days, this.db.events, this.db.symptoms, this.db.medications, this.db.meta, this.db.reminderLog],
       async () => {
         await Promise.all([
           this.db.days.clear(),
@@ -172,12 +190,14 @@ export class DexieRepository implements Repository {
           this.db.symptoms.clear(),
           this.db.medications.clear(),
           this.db.meta.clear(),
+          this.db.reminderLog.clear(),
         ]);
         await Promise.all([
           this.db.days.bulkPut(b.days),
           this.db.events.bulkPut(b.events),
           this.db.symptoms.bulkPut(b.symptoms),
           this.db.medications.bulkPut(b.medications),
+          this.db.reminderLog.bulkPut(b.reminderLog ?? []),
           this.db.meta.bulkPut([
             { key: META_KEYS.reminders, value: b.reminders },
             { key: META_KEYS.profile, value: b.profile },

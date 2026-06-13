@@ -113,10 +113,10 @@ export function isReminderDue(r: Reminder, now: Date = new Date()): boolean {
   return nowMinutes(now) >= due;
 }
 
-/** pt-BR nudge text for a reminder. */
+/** pt-BR nudge text for a reminder (generic — a custom reminder may be anything). */
 function nudgeText(r: Reminder, opts: InitReminderOptions): string {
   if (r.kind === 'day') return opts.dailyText ?? DEFAULT_DAILY_TEXT;
-  return `Hora de tomar ${r.label.trim() || 'o medicamento'}.`;
+  return r.label.trim() ? `Lembrete: ${r.label.trim()}` : 'Você tem um lembrete.';
 }
 
 // Per-reminder guard so each reminder nudges at most once per local day.

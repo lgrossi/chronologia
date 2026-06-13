@@ -6,7 +6,15 @@
  * live via the reactive hooks; navigation/overlay actions arrive as props.
  */
 import { useState } from 'react';
-import { useEventsInRange, useDay, useDaysInRange, useMedications, useProfile, useReminders } from '@/data/hooks';
+import {
+  useDoneReminderIds,
+  useEventsInRange,
+  useDay,
+  useDaysInRange,
+  useMedications,
+  useProfile,
+  useReminders,
+} from '@/data/hooks';
 import { Card } from '@/components/Card';
 import { DayDetail } from '@/components/DayDetail';
 import { Btn } from '@/components/Btn';
@@ -63,6 +71,7 @@ export function Hoje({
   // Every enabled reminder is listed on Home so a missed/failed OS notification
   // is still seen on open.
   const enabledReminders = reminders.filter((r) => r.enabled);
+  const doneReminderIds = useDoneReminderIds(todayKey);
 
   const today = useDay(todayKey);
   const yesterday = useDay(addDays(todayKey, -1));
@@ -359,45 +368,70 @@ export function Hoje({
           </span>
           {enabledReminders.map((r) => {
             const isDay = r.kind === 'day';
-            const done = isDay && logged !== null;
+            const done = isDay ? logged !== null : doneReminderIds.includes(r.id);
             const due = !done && isReminderDue(r);
-            const right = done ? '✓ feito' : r.time;
-            const body = (
-              <>
-                <Icon
-                  name={isDay ? 'pencil' : 'bell'}
-                  size={18}
-                  color={due ? COLORS.accent : COLORS.soft}
-                />
+            const label = r.label.trim() || (isDay ? 'Registrar o dia' : 'Lembrete');
+            const cls = 'flex items-center gap-3 rounded-[14px] px-[15px] py-[12px]';
+            const style = { border: `1.5px dashed ${COLORS.line}` } as const;
+
+            // Day-log reminder: tap to register; shows ✓ once the day is logged.
+            if (isDay) {
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={onRegistrar}
+                  className={`${cls} w-full cursor-pointer bg-transparent text-left`}
+                  style={style}
+                >
+                  <Icon name="pencil" size={18} color={due ? COLORS.accent : COLORS.soft} />
+                  <span className="flex-1 text-sm" style={{ color: due ? COLORS.ink : COLORS.soft }}>
+                    {label}
+                  </span>
+                  <span
+                    className="text-[13px] font-semibold"
+                    style={{ color: done ? COLORS.soft : due ? COLORS.accent : COLORS.faint }}
+                  >
+                    {done ? '✓ feito' : r.time}
+                  </span>
+                </button>
+              );
+            }
+
+            // Custom daily reminder: generic per-day check-off (resets at midnight).
+            return (
+              <div key={r.id} className={cls} style={style}>
+                <Icon name="bell" size={18} color={due ? COLORS.accent : COLORS.soft} />
                 <span
                   className="flex-1 text-sm"
-                  style={{ color: due ? COLORS.ink : COLORS.soft }}
+                  style={{
+                    color: done ? COLORS.faint : due ? COLORS.ink : COLORS.soft,
+                    textDecoration: done ? 'line-through' : 'none',
+                  }}
                 >
-                  {r.label.trim() || (isDay ? 'Registrar o dia' : 'Lembrete')}
+                  {label}
                 </span>
                 <span
                   className="text-[13px] font-semibold"
-                  style={{ color: done ? COLORS.soft : due ? COLORS.accent : COLORS.faint }}
+                  style={{ color: due && !done ? COLORS.accent : COLORS.faint }}
                 >
-                  {right}
+                  {r.time}
                 </span>
-              </>
-            );
-            const cls = 'flex items-center gap-3 rounded-[14px] px-[15px] py-[12px]';
-            const style = { border: `1.5px dashed ${COLORS.line}` } as const;
-            return isDay ? (
-              <button
-                key={r.id}
-                type="button"
-                onClick={onRegistrar}
-                className={`${cls} w-full cursor-pointer bg-transparent text-left`}
-                style={style}
-              >
-                {body}
-              </button>
-            ) : (
-              <div key={r.id} className={cls} style={style}>
-                {body}
+                <button
+                  type="button"
+                  onClick={() => void repo.setReminderDone(todayKey, r.id, !done)}
+                  aria-label={done ? 'desmarcar' : 'marcar feito'}
+                  className="flex items-center justify-center rounded-[9px]"
+                  style={{
+                    minWidth: 36,
+                    minHeight: 36,
+                    border: `1.5px solid ${done ? COLORS.accent : COLORS.line}`,
+                    background: done ? COLORS.accent : 'transparent',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Icon name="check" size={16} color={done ? COLORS.onAccent : COLORS.faint} strokeWidth={2.6} />
+                </button>
               </div>
             );
           })}

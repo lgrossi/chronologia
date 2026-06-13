@@ -18,6 +18,7 @@ function baseBackup(overrides: Partial<Backup> = {}): Backup {
     symptoms: [],
     medications: [],
     reminders: [{ id: 'day-log', kind: 'day', label: 'Registrar o dia', time: '21:00', enabled: true }],
+    reminderLog: [],
     profile: { name: 'Ana', condition: 'Crohn', sinceYear: 2021, onboarded: true },
     ...overrides,
   };

@@ -12,6 +12,7 @@ import type {
   Medication,
   Profile,
   Reminder,
+  ReminderLogEntry,
   ReminderSettings,
   Symptom,
 } from '@/lib/types';
@@ -34,6 +35,7 @@ export class ChronologiaDB extends Dexie {
   symptoms!: Table<Symptom, string>;
   medications!: Table<Medication, string>;
   meta!: Table<MetaRow, string>;
+  reminderLog!: Table<ReminderLogEntry, string>;
 
   constructor() {
     super('chronologia');
@@ -45,6 +47,10 @@ export class ChronologiaDB extends Dexie {
       symptoms: 'id',
       medications: 'id',
       meta: 'key',
+    });
+    // v2: per-day reminder check-offs. Additive — Dexie upgrades in place.
+    this.version(2).stores({
+      reminderLog: 'id, date',
     });
   }
 }

@@ -560,14 +560,14 @@ function RemindersEditor({
   const addBlank = () =>
     persist([
       ...reminders,
-      { id: crypto.randomUUID(), kind: 'medication', label: '', time: '09:00', enabled: true },
+      { id: crypto.randomUUID(), kind: 'custom', label: '', time: '09:00', enabled: true },
     ]);
   const addForMed = (m: Medication) =>
     persist([
       ...reminders,
       {
         id: crypto.randomUUID(),
-        kind: 'medication',
+        kind: 'custom',
         label: m.name,
         time: '09:00',
         enabled: true,
@@ -576,7 +576,7 @@ function RemindersEditor({
     ]);
 
   const dayReminders = reminders.filter((r) => r.kind === 'day');
-  const medReminders = reminders.filter((r) => r.kind === 'medication');
+  const medReminders = reminders.filter((r) => r.kind === 'custom');
   const remindedMedIds = new Set(medReminders.map((r) => r.medicationId).filter(Boolean));
   const quickAdd = medications.filter((m) => m.name.trim() && !remindedMedIds.has(m.id));
 
