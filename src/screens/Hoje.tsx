@@ -20,6 +20,7 @@ import {
   weekKeysMonday,
 } from '@/lib/date';
 import { cycleStatus, infusionMedication, weekStrip } from '@/lib/selectors';
+import { isReminderDue } from '@/lib/reminders';
 import type { DayLog, Mood } from '@/lib/types';
 
 /** Display word for a mood (the recap bolds it as the day's character). */
@@ -56,15 +57,9 @@ export function Hoje({
   const profile = useProfile();
   const reminders = useReminders();
 
-  // Reminder strip summary across the (possibly multiple) reminders.
+  // Every enabled reminder is listed on Home so a missed/failed OS notification
+  // is still seen on open.
   const enabledReminders = reminders.filter((r) => r.enabled);
-  const dayReminder = reminders.find((r) => r.kind === 'day');
-  const reminderText =
-    enabledReminders.length === 0
-      ? 'Lembretes desativados'
-      : enabledReminders.length === 1 && dayReminder?.enabled
-        ? `Lembrete diário às ${dayReminder.time}`
-        : `Lembretes · ${enabledReminders.length} ativos`;
 
   const today = useDay(todayKey);
   const yesterday = useDay(addDays(todayKey, -1));
@@ -292,17 +287,60 @@ export function Hoje({
         </div>
       </div>
 
-      {/* reminder strip */}
-      <div
-        className="flex items-center gap-3 rounded-[14px] px-[15px] py-[13px]"
-        style={{ border: `1.5px dashed ${COLORS.line}`, color: COLORS.soft }}
-      >
-        <Icon name="bell" size={18} color={COLORS.soft} />
-        <span className="flex-1 text-sm">{reminderText}</span>
-        <span className="text-[13px] font-semibold" style={{ color: COLORS.accent }}>
-          editar
-        </span>
-      </div>
+      {/* reminders — every enabled one listed, so a missed notification is still
+          seen here. Day reminder: tap to register; done shows a check. Times go
+          accent once they're due today. */}
+      {enabledReminders.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <span className="ml-0.5 text-sm" style={{ color: COLORS.soft }}>
+            lembretes
+          </span>
+          {enabledReminders.map((r) => {
+            const isDay = r.kind === 'day';
+            const done = isDay && logged !== null;
+            const due = !done && isReminderDue(r);
+            const right = done ? '✓ feito' : r.time;
+            const body = (
+              <>
+                <Icon
+                  name={isDay ? 'pencil' : 'bell'}
+                  size={18}
+                  color={due ? COLORS.accent : COLORS.soft}
+                />
+                <span
+                  className="flex-1 text-sm"
+                  style={{ color: due ? COLORS.ink : COLORS.soft }}
+                >
+                  {r.label.trim() || (isDay ? 'Registrar o dia' : 'Lembrete')}
+                </span>
+                <span
+                  className="text-[13px] font-semibold"
+                  style={{ color: done ? COLORS.soft : due ? COLORS.accent : COLORS.faint }}
+                >
+                  {right}
+                </span>
+              </>
+            );
+            const cls = 'flex items-center gap-3 rounded-[14px] px-[15px] py-[12px]';
+            const style = { border: `1.5px dashed ${COLORS.line}` } as const;
+            return isDay ? (
+              <button
+                key={r.id}
+                type="button"
+                onClick={onRegistrar}
+                className={`${cls} w-full cursor-pointer bg-transparent text-left`}
+                style={style}
+              >
+                {body}
+              </button>
+            ) : (
+              <div key={r.id} className={cls} style={style}>
+                {body}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {sheetDay && (
         <DayDetail
