@@ -620,7 +620,7 @@ function RemindersEditor({
               <Switch
                 on={r.enabled}
                 onToggle={() => update(r.id, { enabled: !r.enabled })}
-                label={r.label.trim() || 'Medicamento'}
+                label={r.label.trim() || 'Novo lembrete'}
               />
               <input
                 style={inputStyle}

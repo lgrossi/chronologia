@@ -32,7 +32,7 @@ import { cycleStatus, infusionMedication, isInfusionMed, pendingEvents, weekStri
 import { isReminderDue } from '@/lib/reminders';
 import { EVENT_META } from '@/lib/events';
 import { repo } from '@/data/repo';
-import type { DayLog, EventPrefill, HealthEvent, Mood, Reminder } from '@/lib/types';
+import type { DayLog, HealthEvent, Mood, Reminder } from '@/lib/types';
 
 /** Display word for a mood (the recap bolds it as the day's character). */
 const MOOD_WORD: Record<Mood, string> = { bom: 'bom', neutro: 'neutro', ruim: 'ruim' };
@@ -55,14 +55,12 @@ export function Hoje({
   onEditDay,
   onAddEvento,
   onEditEvento,
-  onLogReminder,
 }: {
   onRegistrar: () => void;
   onOpenLinha: () => void;
   onEditDay: (dateKey: string) => void;
   onAddEvento: (dateKey: string) => void;
   onEditEvento: (eventId: string, dateKey: string) => void;
-  onLogReminder: (prefill: EventPrefill) => void;
 }) {
   const todayKey = localDayKey();
   // A tapped week-strip day opens the same chooser sheet as the calendar.
@@ -100,14 +98,23 @@ export function Hoje({
     void repo.putEvent({ ...e, done: true });
   };
 
-  // Turn a daily reminder into an event for today: a medicine reminder opens a
-  // pre-filled infusão/remédio; a generic one opens "outro" with the label.
-  const logFromReminder = (r: Reminder) => {
+  // Checking a daily reminder done IS logging it: one action ticks today's
+  // check-off AND records an event (medicine → infusão/remédio with the med;
+  // generic → "outro" with the label). Unchecking removes both. The event uses
+  // a deterministic id so the toggle is idempotent.
+  const toggleReminderDone = async (r: Reminder, currentlyDone: boolean) => {
+    const evId = `r-${r.id}-${todayKey}`;
+    if (currentlyDone) {
+      await repo.setReminderDone(todayKey, r.id, false);
+      await repo.deleteEvent(evId);
+      return;
+    }
     const med = r.medicationId ? meds.find((m) => m.id === r.medicationId) : undefined;
-    const prefill: EventPrefill = med
-      ? { type: isInfusionMed(med) ? 'infusao' : 'remedio', medicationId: med.id }
-      : { type: 'outro', note: r.label.trim() || undefined };
-    onLogReminder(prefill);
+    const event: HealthEvent = med
+      ? { id: evId, date: todayKey, type: isInfusionMed(med) ? 'infusao' : 'remedio', medicationId: med.id, done: true }
+      : { id: evId, date: todayKey, type: 'outro', note: r.label.trim() || undefined, done: true };
+    await repo.putEvent(event);
+    await repo.setReminderDone(todayKey, r.id, true);
   };
 
   const logged = today ?? null;
@@ -410,28 +417,20 @@ export function Hoje({
               );
             }
 
-            // Custom daily reminder: tap the label to log it as an event, or the
-            // check to tick it off for today (generic; resets at midnight).
+            // Custom daily reminder: the check is the single action — it ticks
+            // off today AND records (or removes) the event.
             return (
               <div key={r.id} className={cls} style={style}>
-                <button
-                  type="button"
-                  onClick={() => logFromReminder(r)}
-                  aria-label={`registrar evento de ${label}`}
-                  className="flex flex-1 items-center gap-3 border-none bg-transparent text-left"
-                  style={{ cursor: 'pointer', minHeight: 36 }}
+                <Icon name="bell" size={18} color={due ? COLORS.accent : COLORS.soft} />
+                <span
+                  className="flex-1 text-sm"
+                  style={{
+                    color: done ? COLORS.faint : due ? COLORS.ink : COLORS.soft,
+                    textDecoration: done ? 'line-through' : 'none',
+                  }}
                 >
-                  <Icon name="bell" size={18} color={due ? COLORS.accent : COLORS.soft} />
-                  <span
-                    className="flex-1 text-sm"
-                    style={{
-                      color: done ? COLORS.faint : due ? COLORS.ink : COLORS.soft,
-                      textDecoration: done ? 'line-through' : 'none',
-                    }}
-                  >
-                    {label}
-                  </span>
-                </button>
+                  {label}
+                </span>
                 <span
                   className="text-[13px] font-semibold"
                   style={{ color: due && !done ? COLORS.accent : COLORS.faint }}
@@ -440,7 +439,7 @@ export function Hoje({
                 </span>
                 <button
                   type="button"
-                  onClick={() => void repo.setReminderDone(todayKey, r.id, !done)}
+                  onClick={() => void toggleReminderDone(r, done)}
                   aria-label={done ? 'desmarcar' : 'marcar feito'}
                   className="flex items-center justify-center rounded-[9px]"
                   style={{
