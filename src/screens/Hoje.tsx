@@ -32,7 +32,7 @@ import { cycleStatus, infusionMedication, isInfusionMed, pendingEvents, weekStri
 import { isReminderDue } from '@/lib/reminders';
 import { EVENT_META } from '@/lib/events';
 import { repo } from '@/data/repo';
-import type { DayLog, HealthEvent, Mood, Reminder } from '@/lib/types';
+import type { DayLog, EventPrefill, HealthEvent, Mood, Reminder } from '@/lib/types';
 
 /** Display word for a mood (the recap bolds it as the day's character). */
 const MOOD_WORD: Record<Mood, string> = { bom: 'bom', neutro: 'neutro', ruim: 'ruim' };
@@ -55,12 +55,14 @@ export function Hoje({
   onEditDay,
   onAddEvento,
   onEditEvento,
+  onSuggestEvent,
 }: {
   onRegistrar: () => void;
   onOpenLinha: () => void;
   onEditDay: (dateKey: string) => void;
   onAddEvento: (dateKey: string) => void;
   onEditEvento: (eventId: string, dateKey: string) => void;
+  onSuggestEvent: (prefill: EventPrefill) => void;
 }) {
   const todayKey = localDayKey();
   // A tapped week-strip day opens the same chooser sheet as the calendar.
@@ -98,23 +100,18 @@ export function Hoje({
     void repo.putEvent({ ...e, done: true });
   };
 
-  // Checking a daily reminder done IS logging it: one action ticks today's
-  // check-off AND records an event (medicine → infusão/remédio with the med;
-  // generic → "outro" with the label). Unchecking removes both. The event uses
-  // a deterministic id so the toggle is idempotent.
-  const toggleReminderDone = async (r: Reminder, currentlyDone: boolean) => {
-    const evId = `r-${r.id}-${todayKey}`;
-    if (currentlyDone) {
-      await repo.setReminderDone(todayKey, r.id, false);
-      await repo.deleteEvent(evId);
-      return;
-    }
+  // Checking a daily reminder ticks off today AND *suggests* logging an event by
+  // opening the editor pre-filled (medicine → infusão/remédio with the med;
+  // generic → "outro" with the label). She can save it or cancel — the check-off
+  // stands either way. Unchecking just clears the check.
+  const handleCheck = (r: Reminder, currentlyDone: boolean) => {
+    void repo.setReminderDone(todayKey, r.id, !currentlyDone);
+    if (currentlyDone) return;
     const med = r.medicationId ? meds.find((m) => m.id === r.medicationId) : undefined;
-    const event: HealthEvent = med
-      ? { id: evId, date: todayKey, type: isInfusionMed(med) ? 'infusao' : 'remedio', medicationId: med.id, done: true }
-      : { id: evId, date: todayKey, type: 'outro', note: r.label.trim() || undefined, done: true };
-    await repo.putEvent(event);
-    await repo.setReminderDone(todayKey, r.id, true);
+    const prefill: EventPrefill = med
+      ? { type: isInfusionMed(med) ? 'infusao' : 'remedio', medicationId: med.id }
+      : { type: 'outro', note: r.label.trim() || undefined };
+    onSuggestEvent(prefill);
   };
 
   const logged = today ?? null;
@@ -439,7 +436,7 @@ export function Hoje({
                 </span>
                 <button
                   type="button"
-                  onClick={() => void toggleReminderDone(r, done)}
+                  onClick={() => handleCheck(r, done)}
                   aria-label={done ? 'desmarcar' : 'marcar feito'}
                   className="flex items-center justify-center rounded-[9px]"
                   style={{

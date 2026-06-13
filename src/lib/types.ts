@@ -69,6 +69,13 @@ export interface Reminder {
   medicationId?: string;
 }
 
+/** Seed values for a new event opened from elsewhere (e.g. suggested by a reminder). */
+export interface EventPrefill {
+  type?: EventType;
+  medicationId?: string;
+  note?: string;
+}
+
 /** One per-day check-off: reminder `reminderId` was marked done on `date`. */
 export interface ReminderLogEntry {
   id: string; // `${date}|${reminderId}`

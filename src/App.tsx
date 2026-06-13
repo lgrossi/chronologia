@@ -166,6 +166,7 @@ function Shell() {
                 onEditDay={(k) => openRegistro(k)}
                 onAddEvento={(k) => openEvento(k)}
                 onEditEvento={(id, k) => openEvento(k, id)}
+                onSuggestEvent={(prefill) => openEvento(undefined, undefined, prefill)}
               />
             }
           />
@@ -224,6 +225,7 @@ function OverlayHost() {
     <AddEvento
       dateKey={overlay.dateKey}
       eventId={overlay.eventId}
+      prefill={overlay.prefill}
       onClose={closeOverlay}
       onSaved={(type, mode) => {
         closeOverlay();

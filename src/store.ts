@@ -13,12 +13,13 @@
  */
 import { create } from 'zustand';
 import { localDayKey } from '@/lib/date';
+import type { EventPrefill } from '@/lib/types';
 
 export type Tab = 'hoje' | 'linha' | 'tendencias' | 'perfil';
 
 export type Overlay =
   | { kind: 'registro'; dateKey: string }
-  | { kind: 'evento'; dateKey: string; eventId?: string }
+  | { kind: 'evento'; dateKey: string; eventId?: string; prefill?: EventPrefill }
   | null;
 
 interface AppState {
@@ -27,7 +28,7 @@ interface AppState {
 
   overlay: Overlay;
   openRegistro: (dateKey?: string) => void;
-  openEvento: (dateKey?: string, eventId?: string) => void;
+  openEvento: (dateKey?: string, eventId?: string, prefill?: EventPrefill) => void;
   closeOverlay: () => void;
 }
 
@@ -37,7 +38,7 @@ export const useStore = create<AppState>((set) => ({
 
   overlay: null,
   openRegistro: (dateKey = localDayKey()) => set({ overlay: { kind: 'registro', dateKey } }),
-  openEvento: (dateKey = localDayKey(), eventId) =>
-    set({ overlay: { kind: 'evento', dateKey, eventId } }),
+  openEvento: (dateKey = localDayKey(), eventId, prefill) =>
+    set({ overlay: { kind: 'evento', dateKey, eventId, prefill } }),
   closeOverlay: () => set({ overlay: null }),
 }));
